@@ -12,6 +12,7 @@ MS5837 pressSens; //Blue Robotics pressure sensor
 #define DOaddress 100 //default i2c ID number for EZO DO Circuit.
 String frameStart = "ZZ,";
 String frame = "";
+String temp = "";
 
 //below is for Atlas probes
 char computerdata[20];           //we make a 20 byte character array to hold incoming data from a pc/mac/other.
@@ -44,13 +45,13 @@ void setup() {
     delay(5000);
   }
 
-  pressSens.setFluidDensity(1029); //kg/m3 for seawater. Will need to adjust  for air pressure later.
+  pressSens.setFluidDensity(1.204); //kg/m3 for sea level air.
 }
 
 void string_pars() {                  //this function will break up the DO's CSV string into its 2 individual parts. DO|SAT|
                                       //this is done using the C command “strtok”.
 
-  DO = strtok(do_data, ",");          //let's pars the string at each comma.
+  DO = strtok(DO_data, ",");          //let's pars the string at each comma.
   sat = strtok(NULL, ",");            //let's pars the string at each comma.
  
   //Serial.print("DO:");                //we now print each value we parsed separately.
@@ -68,14 +69,16 @@ void string_pars() {                  //this function will break up the DO's CSV
 void loop() {
   PARval = analogRead(A0); //Retrieve...
   PARvolts = PARval * (5.0 / 1023.0); //...and convert PAR sensor reading
+  //insert conversion to umol once known
 
   LICORval = analogRead(A1); //Retrieve...
   LICORvolts = LICORval * (5.0 / 1023.0); //...and convert LICOR sensor reading
+  //insert conversion to ppm CO2 once set in the LICOR
 
   pressSens.read(); //Retrieve all fields for BR pressure sensor (i.e. pressSens.pressure() in mbar, pressSens.temperature() in deg C, etc.)
 
   //pH sensor
-  time_ = 250; //set lower since polling will be automatic
+  time_ = 650; //set lower since polling will be automatic
   Wire.beginTransmission(pHaddress); //circuit ID
   Wire.write("R"); //single reading
   Wire.endTransmission(); //and close
@@ -114,12 +117,17 @@ void loop() {
   }
 
   ph_float = atof(ph_data); //convert pH data array to a float
+  if (pHcode != 1) {
+    ph_float = -1.0;
+  }
 
   //DO sensor
-  time_ = 250; //set lower since polling will be automatic
+  time_ = 500; //set lower since polling will be automatic
   Wire.beginTransmission(DOaddress); //circuit ID
   Wire.write("R"); //single reading
   Wire.endTransmission(); //and close
+
+  delay(time_); //wait the correct amount of time for the circuit to complete its instruction.
 
   Wire.requestFrom(DOaddress, 32, 1); //call the circuit and request 32 bytes (this may be more than we need)
   DOcode = Wire.read(); //the first byte is the response code, we read this separately.
@@ -152,11 +160,16 @@ void loop() {
     }
   }
 
+  if (DOcode != 1) {
+    DO_float = -1.0;
+  }
+
   if (computerdata[0] == 'r') string_pars(); //break up the DO's comma separated string into its individual parts. 
     
-  //concatenate all the sensor readings --> CO2 volts, pH reading, PAR reading, DO reading, pressure
-  frame = frameStart + LICORvolts + "," + String(ph_float) + "," + PARvolts + "," + String(DO_float) + "," + String(pressSens.pressure()) + "\r\n";
-  Serial.println(frame); //send information to the Pi
+  //concatenate all the sensor readings --> CO2 volts, pH reading, PAR reading, DO reading, pressure, press sensor temp, DO code, pH code
+  frame = frameStart + LICORvolts + "," + String(ph_float) + "," + PARvolts + "," + String(DO_float) + "," + String(pressSens.pressure() * 0.0145) 
+    + "," + String((pressSens.temperature()*1.8)+32.0) + "," + String(DOcode) + "," + String(pHcode) + "\r\n";
+  Serial.print(frame); //send information to the Pi
 
-  delay(1000);
+  delay(5000);
 }
