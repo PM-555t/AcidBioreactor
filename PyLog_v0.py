@@ -4,6 +4,8 @@ import serial
 import pandas as pd
 import csv
 import sys
+import os
+from pathlib import Path
 
 ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
 
@@ -27,7 +29,12 @@ while True:
         
         #log the read before screwing around with it too much
         # Was a simple write before but it isn't setting proper newlines; moved to csvwriter and put parsing code in a different script
-        b = open(logName,"a") #have to open and close to expose the last line
+        #have to open and close to expose the last line
+        myfile = Path(logName)
+        if myfile.is_file():
+            if (os.path.getsize(logName) > 100000) :
+                logName = datetime.datetime.today().strftime('%Y%m%d_%H%M') + '.csv'
+        b = open(logName,"a")
         writer = csv.writer(b)
         writer.writerow(test)
         b.close() #have to open and close to expose the last line
