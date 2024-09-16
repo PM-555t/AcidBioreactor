@@ -15,6 +15,7 @@ def startTail(theLogName):
             stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     pnow = select.poll()
     pnow.register(fnow.stdout)
+    print('Reader started')
     return fnow, pnow
 
 def killTail(fToKill):
@@ -28,7 +29,6 @@ def findNewLog(typeStr):
     #find all CSV files, then determine newest, then open newest
     list_of_files = glob.glob(typeStr)
     nameStr = max(list_of_files, key=os.path.getctime)
-    print("Active log: " + nameStr)
     return nameStr
 
 def logOverSwap(theLogName):
@@ -38,11 +38,21 @@ def logOverSwap(theLogName):
         if (os.path.getsize(theLogName) > maxFileSize):
             theLogName = findNewLog('*.csv')
             wasDiff = True
+            print('Active log: ' + theLogName)
     return wasDiff, theLogName
 
+
+#start of main code
 maxFileSize = 100000
-logName = findNewLog('*.csv')
+#later, change the below code to sleep and check again, in case PyState starts before PyLog when Pi comes online
+try:
+    logName = findNewLog('*.csv')
+    print('Active log: ' + logName)
+except:
+    print('File search failed')
+    sys.exit()
 f, p = startTail(logName)
+print(str(f) + ',' + str(p))
 
 #set up table for reading in log values
 recentVals = pd.DataFrame(index=[1,2,3,4,5],columns=['Time','frame key','CO2','pH','PAR','DO',
@@ -51,7 +61,7 @@ recentVals.fillna(0)
 dfIndex = int(1)
 curLine = "" #variable for last line
 
-# variables that will be parsed; instantiate just for memory purposes
+#variables that will be parsed; instantiate just for memory purposes
 CO2volts = float(0)
 pHval = float(0)
 PARval = float(0)
@@ -65,12 +75,24 @@ pHcode = int(0)
 state = int(0)
 valChange = False
 
+#To Add: what happens if PyLog restarts while PyState is running?
+#Currently, PyState can handle the file being reset because it's too large.
+#But what if there is just a new file because PyLog restarted.
+#Should probably check for a new file on every loop. Logging is slow anyways.
 while True:
     try:
-        isNew, logName = logOverSwap(logName) #each cycle, check if PyLog iterated the log file
+        logCheck = findNewLog('*.csv')#each cycle, check to see if a newer csv was generated because PyLog cycled
+        if not logCheck == logName:
+            logName = logCheck
+            killTail(f) #...kill the old tail process...
+            f, p = startTail(logName) #...and start a new one.
+            print('Active log: ' + logName)
+        #the below line (and function) is redundant now, right?
+        isNew, logName = logOverSwap(logName) #each cycle, check if PyLog iterated the log file for size reasons        
         if isNew: #if it did...
             killTail(f) #...kill the old tail process...
             f, p = startTail(logName) #...and start a new one.
+            print('Active log: ' + logName)
         
         #call the tail command, then wait 1 second and try again
         if p.poll(1):

@@ -6,3 +6,6 @@
 # unneeded header files
 /SensorTx/MS5837.cpp
 /SensorTx/MS5837.h
+
+codeScribbles.py
+codeScribbles2.py
