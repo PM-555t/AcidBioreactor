@@ -7,5 +7,8 @@
 /SensorTx/MS5837.cpp
 /SensorTx/MS5837.h
 
+#screwaround tests
 codeScribbles.py
 codeScribbles2.py
+serial_in_test.py
+shmWriteTest.py

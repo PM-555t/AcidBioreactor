@@ -8,7 +8,25 @@ import psutil
 import glob
 import os
 from pathlib import Path
+import threading
+import smbus
 
+'''Send start command, then after x seconds...'''
+def runPump(addr, seconds):
+    channel = 1 #need to confirm when running this way
+    bus = smbus.SMBus(channel)
+    boardAddr = 0x10 #can later add code to detect
+    relayAddr = addr
+    bus.write_i2c_block_data(boardAddr,relayAddr,[0xFF]) #turn on
+    t = threading.Timer(seconds,shutOffPump,args=[boardAddr,relayAddr,bus,]) #turn off
+    t.start()
+    return t
+
+'''...send stop command'''
+def shutOffPump(board,relay,bus):
+    bus.write_i2c_block_data(board,relay,[0x00])
+
+'''Initiates a process which calls the typical CLI Tail function'''
 def startTail(theLogName):
     #to avoid trying to open and close the log file from two scripts, just call 'tail' and pipe it
     fnow = subprocess.Popen(['tail','-F',theLogName],\
@@ -18,6 +36,8 @@ def startTail(theLogName):
     print('Reader started')
     return fnow, pnow
 
+'''Closes the tail when necessary to preserve memory and entries
+in the process table'''
 def killTail(fToKill):
     process = psutil.Process(fToKill.pid)
     for proc in process.children(recursive=True):
@@ -42,7 +62,20 @@ def logOverSwap(theLogName):
     return wasDiff, theLogName
 
 
-#start of main code
+'''I need to doublecheck the below block's values'''
+addrSWPump = 0x02
+addrAcidPump = 0x03
+addrExcessPump = 0x04
+timeSWPump = 1.0 #set now, change later
+timeAcidPump = 1.0
+timeExcessPump = 1.0
+#briefly cycle the pumps on script start
+runPump(addrSWPump,timeSWPump)
+runPump(addrAcidPump,timeAcidPump)
+runPump(addrExcessPump,timeExcessPump)
+
+
+'''Start of main code'''
 maxFileSize = 100000
 #later, change the below code to sleep and check again, in case PyState starts before PyLog when Pi comes online
 try:
@@ -75,13 +108,20 @@ pHcode = int(0)
 state = int(0)
 valChange = False
 
+#loop initation time, for timers
+startTime = time.monotonic()
+lastAcidTime = time.monotonic()
+lastSWTime = time.monotonic()
+pumpOn = False
+
 #To Add: what happens if PyLog restarts while PyState is running?
 #Currently, PyState can handle the file being reset because it's too large.
 #But what if there is just a new file because PyLog restarted.
 #Should probably check for a new file on every loop. Logging is slow anyways.
 while True:
     try:
-        logCheck = findNewLog('*.csv')#each cycle, check to see if a newer csv was generated because PyLog cycled
+        '''First things first, we need to make sure we're always watching the most current log each cycle.'''
+        logCheck = findNewLog('*.csv') #check to see if a newer csv was generated because PyLog cycled
         if not logCheck == logName:
             logName = logCheck
             killTail(f) #...kill the old tail process...
@@ -94,18 +134,23 @@ while True:
             f, p = startTail(logName) #...and start a new one.
             print('Active log: ' + logName)
         
+        '''Then we grab the last line from the most current log file'''
         #call the tail command, then wait 1 second and try again
         if p.poll(1):
             curLine = f.stdout.readline()
         time.sleep(1)
         #since this doesn't check for updates, we need to check if the line is new or old
         
-        #extract out the array for each new line
+        '''Extract out the array for each new line'''
         curLine = str(curLine).replace("\\r\\n","") #remove newline chars
         curLine = str(curLine).replace("'","") #remove string-within-a-string
         curLine = str(curLine).replace("b","") #remove byte designations
         test = str(curLine).split(",") #break the fields up
         
+        '''To avoid sensor issues triggering system behavior, we want to average the
+        last 5 readings (which ends up being about 35 seconds delay), so we need to construct
+        a running table of values. Because of the way the tail function works (i.e. grabs
+        the last line whether it's new or not), we have to check each line before inserting.'''
         valChange = False
         #fill the table of the last 5 values
         if dfIndex < 6: #fill the first 5 rows
@@ -119,7 +164,8 @@ while True:
                 recentVals.loc[5] = test
                 valChange = True
         
-        if valChange: #if we actually have a new reading, then capture our averaged readings
+        '''If we actually have a new reading, then capture our averaged readings'''
+        if valChange: 
             print(test)
             CO2volts = recentVals['CO2'].astype(float).mean()
             pHval = recentVals['pH'].astype(float).mean()
@@ -130,7 +176,16 @@ while True:
             DOcode = int(test[8])
             pHcode = int(test[9])
             
+        '''Apparently, the SW cycling should happen on a regular schedule'''
+        '''To avoid pausing this script, another script and timer should
+        be initiated to run the pumps for a certain amount of time'''
+        #put in scheduler code here
+        
     except KeyboardInterrupt:
-        #make sure to kill the tail command
+        #make sure to kill the tail command, if the command is exited manually
         killTail(f)
         sys.exit()
+        '''Not sure what to do if the script process crashes. This system may not
+        run long enough for that to matter, though, as we don't expect a loop which
+        depletes the process table by rapidly iterating process initiation and leaving
+        it hanging.'''
