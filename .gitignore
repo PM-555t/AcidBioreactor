@@ -4,11 +4,12 @@
 #sensitive information
 
 # unneeded header files
-/SensorTx/MS5837.cpp
-/SensorTx/MS5837.h
+SensorTx/MS5837.cpp
+SensorTx/MS5837.h
 
 #screwaround tests
 codeScribbles.py
 codeScribbles2.py
 serial_in_test.py
 shmWriteTest.py
+SMtests/
