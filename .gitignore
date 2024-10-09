@@ -6,6 +6,8 @@
 # unneeded header files
 SensorTx/MS5837.cpp
 SensorTx/MS5837.h
+SensorTx_v2/MS5837.cpp
+SensorTx_v2/MS5837.h
 
 #screwaround tests
 codeScribbles.py

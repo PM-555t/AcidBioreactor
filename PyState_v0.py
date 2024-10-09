@@ -44,12 +44,13 @@ def killTail(fToKill):
     process.kill()
     print("Reader process killed")
 
+'''Find all CSV files, then determine newest, then open newest'''
 def findNewLog(typeStr):
-    #find all CSV files, then determine newest, then open newest
     list_of_files = glob.glob(typeStr)
     nameStr = max(list_of_files, key=os.path.getctime)
     return nameStr
 
+'''Find and return new log name if log file got too big'''
 def logOverSwap(theLogName):
     myfile = Path(theLogName)
     wasDiff = False
@@ -67,10 +68,10 @@ def switchTimerFlag(BRobject,majorMinor,startStop): #majorMinor = True is the ma
     else:
         BRobject._minorTimerDone = startStop
 
-'''The actual timer'''
-def pumpWaitTimer(reactorObj,major,secs):
-    switchTimer(reactorObj,major,False)
-    t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,major,True,])
+'''The actual timer which swaps the flags'''
+def pumpWaitTimer(reactorObj,majorOrMinor,secs): #majorOrMinor = True is the major timer
+    switchTimer(reactorObj,majorOrMinor,False)
+    t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,majorOrMinor,True,])
 
 '''Calculate the time difference, in seconds, between two of the time strings in the log'''
 def strSecDiff(startTime,endTime):
@@ -110,21 +111,23 @@ def strSecDiff(startTime,endTime):
     secCount = secDiff + (minDiff*60) + (hrDiff*(60*60))
     return secCount
 
-'''I need to doublecheck the below block's values'''
+'''Block of variables and calls for peristaltic pump i2c control.
+I need to doublecheck the below block's values before 1st run.'''
 channel = 1 #need to confirm when running this way
 boardAddr = 0x10 #can later add code to detect
 addrSWPump = 0x02
 addrAcidPump = 0x03
 addrExcessPump = 0x04
-primeTimeSWPump = 5.0 #set now, change later
+primeTimeSWPump = 5.0 #time to prime the pumps at startup. Set now, change later.
 primeTimeAcidPump = 5.0
 primeTimeExcessPump = 5.0
 pumpCal = 0.581395 #sec/mL, averaged across the three pumps
-#briefly cycle the pumps on script start
+#briefly prime the pumps on script start
 runPump(addrSWPump,primeTimeSWPump)
+time.sleep(1.0)
 runPump(addrAcidPump,primeTimeAcidPump)
+time.sleep(1.0)
 runPump(addrExcessPump,primeTimeExcessPump)
-
 
 '''Start of main code'''
 maxFileSize = 100000
@@ -140,9 +143,9 @@ print(str(f) + ',' + str(p))
 
 #set up table for reading in log values
 recentVals = pd.DataFrame(index=[1,2,3,4,5,6,7,8,9,10],columns=['Time','frame key','CO2','pH','PAR','DO',
-                                                     'Pressure','Temperature','DO_code','pH_code','d(pH)/dt'])
+                                                     'Pressure','Temperature','DO_code','pH_code','FloatSW','d(pH)/dt'])
 longVals = pd.DataFrame(index=pd.RangeIndex(start=1, stop=61, step=1),columns=['Time','CO2','pH','PAR','DO',
-                                                     'Pressure','Temperature','DO_code','pH_code','d(pH)/dt'])
+                                                     'Pressure','Temperature','DO_code','pH_code','Last FloatSW','d(pH)/dt'])
 recentVals.fillna(0)
 longVals.fillna(0)
 dfIndex = int(1)
@@ -152,6 +155,7 @@ lastLongTime = time.monotonic()
 
 #variables that will be parsed; instantiate just for memory purposes
 CO2volts = float(0)
+#CO2cal = Need to insert calibration!
 pHval = float(0)
 PARval = float(0)
 DOval = float(0)
@@ -159,11 +163,12 @@ pressure = float(0)
 temperature = float(0)
 DOcode = int(0)
 pHcode = int(0)
+floatSW = int(1)
 dPHdT = float(0) #pH units per hour
 longdPHdT = float(0)
 #lazyPhTime = time.monotonic()
 
-#for state machine
+#variables for state machine
 state = int(0)
 lastState = int(0)
 valChange = False
@@ -171,6 +176,11 @@ pumpOrMsr = False #a sub-state
 justPumped = False
 acidVolAdded = int(0)
 pHset = 6.5 #can change this later
+CO2_max = 0 #just an empty value for now
+CO2_set = 400 #in ppm, post converstion from voltage
+tempCO2 = CO2_set #just a changeable placeholder value
+dPHdT_set = 0.2 #pH units / hour; can change this later
+dilutionVol = 5000
 
 myReactor = BioReactor.Reactor(BioReactor.Acidification())
 print("State number:",myReactor._state.stateNumber)
@@ -225,19 +235,8 @@ while True:
             sameLine = True
             if dfIndex == 1:
                 sameLine = (recentVals.loc[dfIndex]['Time'] == test[0])
-                #print('sameLine input, line 228:',(recentVals.loc[dfIndex]['Time'] == test[0]))
             else:
                 sameLine = (recentVals.loc[dfIndex-1]['Time'] == test[0])
-                #print('sameLine input, line 231:',(recentVals.loc[dfIndex-1]['Time'] == test[0]))
-                #print("End pH:",float(test[3]))
-                #print("Start pH:",float(recentVals.loc[dfIndex-1]['pH']))
-                #print("pH difference:",float(test[3])-float(recentVals.loc[dfIndex-1]['pH']))
-                #print("Start time:",str(recentVals.loc[dfIndex-1]['Time']))
-                #print("End time:",str(test[0]))
-                #print("Time difference, seconds:",strSecDiff(recentVals.loc[dfIndex-1]['Time'],test[0]))
-                #print("Time difference, hours:",strSecDiff(recentVals.loc[dfIndex-1]['Time'],test[0])/3600)
-                #print("Does it think they're the same line? ",sameLine)
-                #print("Asked another way...",(recentVals.loc[dfIndex-1]['Time'] == test[0]))
             if not sameLine: #if the line isn't the same as the one being inserted
                 if dfIndex == 1:
                     dPHdT = 0.0
@@ -245,7 +244,7 @@ while True:
                     dPH = (float(test[3])-float(recentVals.loc[dfIndex-1]['pH']))
                     dT = (strSecDiff(recentVals.loc[dfIndex-1]['Time'],test[0])/3600)
                     dPHdT =  dPH / dT
-                    if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.1): #catch little fluctuations
+                    if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.02): #catch little fluctuations
                         dPHdT = 0.0
                 recentVals.loc[dfIndex] = test + [dPHdT]
                 dfIndex = dfIndex + 1
@@ -254,13 +253,12 @@ while True:
                 pass
         else: #and then iterate down 1 row each sampling period
             sameLine = (recentVals.loc[10]['Time'] == test[0])
-            #print("sameLine input,line 255:",(recentVals.loc[10]['Time'] == test[0]))
             if not sameLine:
                 dPH = (float(test[3])-float(recentVals.loc[10]['pH']))
                 dT = (strSecDiff(recentVals.loc[10]['Time'],test[0])/3600)
-                dPHdT = dPH / dT
+                dPHdT = dPH / dT #so this is a single point FBD; replace with more intelligent derivative in the future
                 
-                if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.1): #catch little fluctuations
+                if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.02): #catch little fluctuations
                         dPHdT = 0.0
                 
                 recentVals = recentVals.loc[:].shift(periods=-1,axis=0) #dont use fill_values because zeros affect mean
@@ -280,12 +278,13 @@ while True:
             temperature = recentVals['Temperature'].astype(float).mean()
             DOcode = int(test[8])
             pHcode = int(test[9])
+            floatSW = int(test[10])
             longdPHdT = recentVals['d(pH)/dt'].astype(float).mean()
             #and insert our averaged readings into the long form table, if it's been long enough
             if ((time.monotonic() - lastLongTime) > 60):
                 lastLongTime = time.monotonic()
                 
-                curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,longdPHdT]                
+                curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]                
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
                         longVals.loc[longIndex] = curArray
@@ -307,17 +306,17 @@ while True:
         state = myReactor._state.stateNumber
         match state:
             case 40:
-                #Below block commented out for testing purposes, 10-4-24
-                '''if state != lastState:
+                if state != lastState:
                     print("Acidification")
                     lastState = state
-                    #Make sure to timer completion flags are currently set to "finished"
+                    #Make sure timer completion flags are currently set to "finished"
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
                     justPumped = False #reset flag for having run acid pump
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
-                    
-                #in acidification, we add 1 mL of acid at a time, up to 15
+                
+                #Below block commented out for testing purposes, 10-4-24
+                '''#in acidification, we add 1 mL of acid at a time, up to 15
                 #after adding each mL, we wait 1 minute
                 #then check if we've triggered our pH limit or we have too much volume
                 if (acidVolAdded <= 15) and (pHval < pHset):
@@ -337,25 +336,89 @@ while True:
                     myReactor._pumpOrMsr = False #measuring, not pumping
                     myReactor.nextState(50) #change to "Watch CO2"
                                
-                #myReactor.curPumpAction(): #when we loop, if we're currently pumping...'''
+                #myReactor.curPumpAction(): #just a leftover line to remember the function name'''
                 
                     
             case 50:
                 if state != lastState:
                     print("Watch CO2")
                     lastState = state
+                    #Make sure timer completion flags are currently set to "finished"
+                    switchTimerFlag(myReactor,True,True) #major timer
+                    switchTimerFlag(myReactor,False,True) #minor timer
+                    justPumped = False #reset flag for having run acid pump
+                    myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
+                    pumpWaitTimer(myReactor,True,3600)#start major timer for 1 hr
+                    if longIndex > 1: #don't trust table or reading at first row
+                        CO2_max = longVals.loc[longIndex]['CO2'].astype(float) * CO2cal #convert from volts to ppm
+                    else:
+                        CO2_max = CO2_set #basically just assuming CO2 = setpoint
+                    
+                #every loop, update current max CO2 reading
+                tempCO2 = CO2_set
+                if longIndex > 1: #don't trust table or reading at first row
+                    tempCO2 = longVals.loc[longIndex]['CO2'].astype(float) * CO2cal #convert from volts to ppm
+                if tempCO2 > CO2_max:
+                    CO2_max = tempCO2
+                    
+                #when timer is up, make decision --> low CO2 goes to S71, high CO2 goes to S60
+                if myReactor.curMajorTimer(): #if the hour timer has finished...
+                    if CO2_max < CO2_set:
+                        myReactor.nextState(71) #move to dilution, too much algae is consuming too much CO2
+                    else:
+                        myReactor.nextState(60) #move to incubation, we need algae to consume more
+                    
             case 60:
                 if state != lastState:
                     print("Incubate")
                     lastState = state
+                    switchTimerFlag(myReactor,True,True) #major timer
+                    switchTimerFlag(myReactor,False,True) #minor timer
+                    #set major timer to 1 hr
+                    pumpWaitTimer(myReactor,True,3600)
+                
+                #at the 1 hr mark, check the last 30 minutes of dPHdT and raw pH data
+                if myReactor.curMajorTimer():
+                    absMaxPhRate = abs(longVals.loc[30:60]['d(pH)/dt'].astype(float).max())
+                    currpH = longVals.loc[58:60]['pH'].astype(float).mean() #average the last 3 minutes
+                    
+                    if (absMaxPhRate < dPHdT_set) and ((currpH - pHset) < 0.5): #to make basic again
+                        myReactor.nextState(71)
+                    elif (absMaxPhRate < dPHdT_set) and ((currpH - pHset) > 0.5): #to bring pH back down
+                        myReactor.nextState(40)                   
+                    else: #if rate > set, reset the major timer to 10 minutes to check again
+                        pumpWaitTimer(myReactor,True,600)
+                    #This is where the code can get stuck but it's probably best that nothing is running if the pH probe is throwing wacky values
+                
             case 71:
                 if state != lastState:
                     print("Dilute part a")
                     lastState = state
+                    switchTimerFlag(myReactor,True,True) #major timer
+                    switchTimerFlag(myReactor,False,True) #minor timer
+                    runPump(addrExcessPump,pumpCal*dilutionVol) #run pump for 5 L
+                    justPumped = True
+                    myReactor._pumpOrMsr = True #set state to pumping, not measuring
+                    pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
+                
+                if myReactor.curMinorTimer(): #when pump is done...
+                    myReactor.nextState(72) #...move on to SW addition
+                    
             case 72:
                 if state != lastState:
                     print("Dilute part b")
                     lastState = state
+                    switchTimerFlag(myReactor,True,True) #major timer
+                    switchTimerFlag(myReactor,False,True) #minor timer
+                    runPump(addrSWPump,pumpCal*dilutionVol) #run pump for 5 L
+                    justPumped = True
+                    myReactor._pumpOrMsr = True #set state to pumping, not measuring
+                    pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
+                
+                if myReactor.curMinorTimer() or (longVals.loc[60]['Last FloatSW'].astype(float) < 1): #when pump is done or float switch active...
+                    myReactor.nextState(60) #...incubate new mixture a little
+                    myReactor._pumpOrMsr = False #set state to measuring
+                    
             case _:
                 print("Undefined bioreactor state")
                 #if we get here, just close out
