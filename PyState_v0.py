@@ -155,7 +155,7 @@ lastLongTime = time.monotonic()
 
 #variables that will be parsed; instantiate just for memory purposes
 CO2volts = float(0)
-#CO2cal = Need to insert calibration!
+CO2cal = 400.0 #LICOR set with 0-5 V DAC, for 0-2000 ppm range, or 400 ppm/V. Arduino ADC is 10-bit, apparently, so overall resolution is 0.5 ppm.
 pHval = float(0)
 PARval = float(0)
 DOval = float(0)
@@ -247,6 +247,7 @@ while True:
                     if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.02): #catch little fluctuations
                         dPHdT = 0.0
                 recentVals.loc[dfIndex] = test + [dPHdT]
+                recentVals.loc[dfIndex]['CO2'] = float(recentVals.loc[dfIndex]['CO2']) * CO2cal
                 dfIndex = dfIndex + 1
                 valChange = True
             else:
@@ -263,6 +264,7 @@ while True:
                 
                 recentVals = recentVals.loc[:].shift(periods=-1,axis=0) #dont use fill_values because zeros affect mean
                 recentVals.loc[10] = test + [dPHdT]
+                recentVals.loc[10]['CO2'] = float(recentVals.loc[10]['CO2']) * CO2cal
                 valChange = True
             else:
                 pass
@@ -270,7 +272,7 @@ while True:
         '''If we actually have a new reading, then capture our averaged readings'''
         if valChange: 
             print(test + [dPHdT])
-            CO2volts = recentVals['CO2'].astype(float).mean()
+            CO2volts = recentVals['CO2'].astype(float).mean() #as of 10/15, is actually CO2 ppm
             pHval = recentVals['pH'].astype(float).mean()
             PARval = recentVals['PAR'].astype(float).mean()
             DOval = recentVals['DO'].astype(float).mean()
@@ -319,7 +321,7 @@ while True:
                 '''#in acidification, we add 1 mL of acid at a time, up to 15
                 #after adding each mL, we wait 1 minute
                 #then check if we've triggered our pH limit or we have too much volume
-                if (acidVolAdded <= 15) and (pHval < pHset):
+                if (acidVolAdded <= 15) and (pHval > pHset):
                     if justPumped = False: #first time running pump
                         runPump(addrAcidPump,pumpCal*1) #run pump for first time, for 1 mL
                         justPumped = True
