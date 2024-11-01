@@ -58,20 +58,22 @@ void setup() {
 
 void string_pars() {  //this function will break up the DO's CSV string into its 2 individual parts. DO|SAT|
                       //this is done using the C command “strtok”.
-
   DO = strtok(DO_data, ",");  //let's pars the string at each comma.
   sat = strtok(NULL, ",");    //let's pars the string at each comma.
 
-  //Serial.print("DO:");                //we now print each value we parsed separately.
-  //Serial.println(DO);                 //this is the D.O. value.
+  Serial.print("DO:");                //we now print each value we parsed separately.
+  Serial.println(DO);                 //this is the D.O. value.
 
-  //Serial.print("SAT:");               //we now print each value we parsed separately.
-  //Serial.println(sat);                //this is the percent saturation.
-  //Serial.println();                   //this just makes the output easier to read by adding an extra blank line
+  Serial.print("SAT:");               //we now print each value we parsed separately.
+  Serial.println(sat);                //this is the percent saturation.
+  Serial.println();                   //this just makes the output easier to read by adding an extra blank line
 
   //convert them into floating point number.
   DO_float = atof(DO);
   sat_float = atof(sat);
+
+  Serial.println(DO_float);
+  Serial.println(sat_float);
 }
 
 void loop() {
@@ -163,17 +165,25 @@ void loop() {
 
   while (Wire.available()) {  //are there bytes to receive.
     in_char = Wire.read();    //receive a byte.
-    ph_data[i] = in_char;     //load this byte into our array.
+    //11/1/24 testing
+    //Serial.print(in_char,HEX);
+    //Serial.print(" ");
+    //
+    DO_data[i] = in_char;     //load this byte into our array.
     i += 1;                   //incur the counter for the array element.
     if (in_char == 0) {       //if we see that we have been sent a null command.
       i = 0;                  //reset the counter i to 0.
       break;                  //exit the while loop.
     }
   }
+  //Serial.println();
+  DO_float = atof(DO_data);
+  //Serial.println(DO_float);
 
   if (DOcode != 1) {
     DO_float = -1.0;
   }
+
 
   if (computerdata[0] == 'r') string_pars();  //break up the DO's comma separated string into its individual parts.
 
@@ -181,6 +191,9 @@ void loop() {
   frame = frameStart + LICORvolts + "," + String(ph_float) + "," + PARvolts + "," + String(DO_float) + "," + String(pressSens.pressure() * 0.0145)
           + "," + String((pressSens.temperature() * 1.8) + 32.0) + "," + String(DOcode) + "," + String(pHcode) + "," + String(floatState) + "\r\n";
   Serial.print(frame);  //send information to the Pi
+
+  //Testing 11/1/24
+  //Serial.println(DO_float);
 
   //10/9/24
   //String testMessage = "Float switch:" + String(floatState) + "\r\n";
