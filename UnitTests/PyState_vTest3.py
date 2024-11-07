@@ -70,7 +70,7 @@ def switchTimerFlag(BRobject,majorMinor,startStop): #majorMinor = True is the ma
 
 '''The actual timer which swaps the flags'''
 def pumpWaitTimer(reactorObj,majorOrMinor,secs): #majorOrMinor = True is the major timer
-    switchTimer(reactorObj,majorOrMinor,False)
+    switchTimerFlag(reactorObj,majorOrMinor,False)
     t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,majorOrMinor,True,])
 
 '''Calculate the time difference, in seconds, between two of the time strings in the log'''

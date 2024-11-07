@@ -70,7 +70,7 @@ def switchTimerFlag(BRobject,majorMinor,startStop): #majorMinor = True is the ma
 
 '''The actual timer which swaps the flags'''
 def pumpWaitTimer(reactorObj,majorOrMinor,secs): #majorOrMinor = True is the major timer
-    switchTimer(reactorObj,majorOrMinor,False)
+    switchTimerFlag(reactorObj,majorOrMinor,False)
     t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,majorOrMinor,True,])
 
 '''Calculate the time difference, in seconds, between two of the time strings in the log'''
@@ -122,6 +122,11 @@ primeTimeSWPump = 5.0 #time to prime the pumps at startup. Set now, change later
 primeTimeAcidPump = 5.0
 primeTimeExcessPump = 5.0
 pumpCal = 0.581395 #sec/mL, averaged across the three pumps
+#apparently the code can hang if the pumps are issued start commands when already running, so make sure they're off
+shutOffPump(boardAddr,addrSWPump,bus)
+shutOffPump(boardAddr,addrAcidPump,bus)
+shutOffPump(boardAddr,addrExcessPump,bus)
+time.sleep(1.0)
 #briefly prime the pumps on script start
 runPump(addrSWPump,primeTimeSWPump)
 time.sleep(1.0)
@@ -435,6 +440,11 @@ while True:
         #make sure to kill the tail command, if the command is exited manually
         killTail(f)
         sys.exit()
+        #and kill pumps
+        shutOffPump(boardAddr,addrSWPump,bus)
+        shutOffPump(boardAddr,addrAcidPump,bus)
+        shutOffPump(boardAddr,addrExcessPump,bus)
+        time.sleep(1.0)
         '''Not sure what to do if the script process crashes. This system may not
         run long enough for that to matter, though, as we don't expect a loop which
         depletes the process table by rapidly iterating process initiation and leaving
