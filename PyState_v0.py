@@ -72,6 +72,8 @@ def switchTimerFlag(BRobject,majorMinor,startStop): #majorMinor = True is the ma
 def pumpWaitTimer(reactorObj,majorOrMinor,secs): #majorOrMinor = True is the major timer
     switchTimerFlag(reactorObj,majorOrMinor,False)
     t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,majorOrMinor,True,])
+    t2.start()
+    return t2
 
 '''Calculate the time difference, in seconds, between two of the time strings in the log'''
 def strSecDiff(startTime,endTime):
@@ -357,14 +359,14 @@ while True:
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
                     pumpWaitTimer(myReactor,True,3600)#start major timer for 1 hr
                     if longIndex > 1: #don't trust table or reading at first row
-                        CO2_max = longVals.loc[longIndex]['CO2'].astype(float) * CO2cal #convert from volts to ppm
+                        CO2_max = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
                     else:
                         CO2_max = CO2_set #basically just assuming CO2 = setpoint
                     
                 #every loop, update current max CO2 reading
                 tempCO2 = CO2_set
                 if longIndex > 1: #don't trust table or reading at first row
-                    tempCO2 = longVals.loc[longIndex]['CO2'].astype(float) * CO2cal #convert from volts to ppm
+                    tempCO2 = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
                 if tempCO2 > CO2_max:
                     CO2_max = tempCO2
                     
