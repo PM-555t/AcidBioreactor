@@ -444,6 +444,10 @@ while True:
     except KeyboardInterrupt:
         #make sure to kill the tail command, if the command is exited manually
         killTail(f)
+        #and kill pumps
+        shutOffPump(boardAddr,addrSWPump,bus)
+        shutOffPump(boardAddr,addrAcidPump,bus)
+        shutOffPump(boardAddr,addrExcessPump,bus)
         #Make sure timers are complete
         TimerCnt = 0
         while (len(threading.enumerate()) > 1):
@@ -456,10 +460,6 @@ while True:
             else:
                 TimerCnt = 0
                 time.sleep(1.0)
-        #and kill pumps
-        shutOffPump(boardAddr,addrSWPump,bus)
-        shutOffPump(boardAddr,addrAcidPump,bus)
-        shutOffPump(boardAddr,addrExcessPump,bus)
         time.sleep(1.0)
         sys.exit()
         '''Not sure what to do if the script process crashes. This system may not

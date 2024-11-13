@@ -184,7 +184,7 @@ void loop() {
           + "," + String((pressSens.temperature() * 1.8) + 32.0) + "," + String(DOcode) + "," + String(pHcode) + "," + String(floatState) + "\r\n";
   Serial.print(frame);  //send information to the Pi
 
-  ph_forTest = ph_forTest + 0.001;
+  ph_forTest = ph_forTest + 0.01;
 
   //10/9/24
   //String testMessage = "Float switch:" + String(floatState) + "\r\n";
