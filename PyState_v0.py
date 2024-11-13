@@ -14,10 +14,11 @@ import BioReactor
 
 '''Send start command, then after x seconds...'''
 def runPump(addr, seconds):
-    bus = smbus.SMBus(channel)
+    #bus = smbus.SMBus(channel) --> moved this down to the initializition block, since calls are made at startup using it
     relayAddr = addr
     bus.write_i2c_block_data(boardAddr,relayAddr,[0xFF]) #turn on
     t = threading.Timer(seconds,shutOffPump,args=[boardAddr,relayAddr,bus,]) #turn off
+    t.daemon = True #so if main thread closes, this timer also closes; won't turn pump off though!
     t.start()
     return t
 
@@ -72,6 +73,7 @@ def switchTimerFlag(BRobject,majorMinor,startStop): #majorMinor = True is the ma
 def pumpWaitTimer(reactorObj,majorOrMinor,secs): #majorOrMinor = True is the major timer
     switchTimerFlag(reactorObj,majorOrMinor,False)
     t2 = threading.Timer(secs,switchTimerFlag,args=[reactorObj,majorOrMinor,True,])
+    t2.daemon = True #so if main thread closes, this timer also closes; won't switch Timer flag in that case
     t2.start()
     return t2
 
@@ -116,6 +118,7 @@ def strSecDiff(startTime,endTime):
 '''Block of variables and calls for peristaltic pump i2c control.
 I need to doublecheck the below block's values before 1st run.'''
 channel = 1 #need to confirm when running this way
+bus = smbus.SMBus(channel)
 boardAddr = 0x10 #can later add code to detect
 addrSWPump = 0x02
 addrAcidPump = 0x03
@@ -441,12 +444,24 @@ while True:
     except KeyboardInterrupt:
         #make sure to kill the tail command, if the command is exited manually
         killTail(f)
-        sys.exit()
+        #Make sure timers are complete
+        TimerCnt = 0
+        while (len(threading.enumerate()) > 1):
+            for thread in threading.enumerate():
+                if 'Timer' in str(thread):
+                    TimerCnt = TimerCnt + 1
+            print("Timers still running:",TimerCnt,"; Time:",time.monotonic())
+            if TimerCnt == 0:
+                break
+            else:
+                TimerCnt = 0
+                time.sleep(1.0)
         #and kill pumps
         shutOffPump(boardAddr,addrSWPump,bus)
         shutOffPump(boardAddr,addrAcidPump,bus)
         shutOffPump(boardAddr,addrExcessPump,bus)
         time.sleep(1.0)
+        sys.exit()
         '''Not sure what to do if the script process crashes. This system may not
         run long enough for that to matter, though, as we don't expect a loop which
         depletes the process table by rapidly iterating process initiation and leaving
