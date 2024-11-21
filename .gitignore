@@ -1,5 +1,6 @@
 #data
 /data
+/.vscode
 
 #sensitive information
 
@@ -17,3 +18,4 @@ shmWriteTest.py
 SMtests/
 example.log
 example2.log
+/Keithley

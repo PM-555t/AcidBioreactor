@@ -13,18 +13,22 @@ import smbus
 import BioReactor
 
 '''Send start command, then after x seconds...'''
-def runPump(addr, seconds):
+def runPump(addr, seconds, loggername):
     #bus = smbus.SMBus(channel) --> moved this down to the initializition block, since calls are made at startup using it
     relayAddr = addr
     bus.write_i2c_block_data(boardAddr,relayAddr,[0xFF]) #turn on
-    t = threading.Timer(seconds,shutOffPump,args=[boardAddr,relayAddr,bus,]) #turn off
+    t = threading.Timer(seconds,shutOffPump,args=[boardAddr,relayAddr,bus,loggername,]) #turn off
     t.daemon = True #so if main thread closes, this timer also closes; won't turn pump off though!
     t.start()
+    logger = logging.getLogger(loggername)
+    logger.debug('Pump run:'+str(addr)+":"+str(seconds))
     return t
 
 '''...send stop command'''
-def shutOffPump(board,relay,bus):
+def shutOffPump(board,relay,bus,loggername):
     bus.write_i2c_block_data(board,relay,[0x00])
+    logger = logging.getLogger(loggername)
+    logger.debug('Pump disabled:'+str(relay))
 
 '''Initiates a process which calls the typical CLI Tail function'''
 def startTail(theLogName):
@@ -115,6 +119,26 @@ def strSecDiff(startTime,endTime):
     secCount = secDiff + (minDiff*60) + (hrDiff*(60*60))
     return secCount
 
+'''11/21/24 - Initiating logging'''
+import logging
+import queue
+from logging.handlers import QueueListener
+from logging.handlers import RotatingFileHandler
+
+log_queue = queue.Queue()
+rot_queue_handler = RotatingFileHandler('StateMachineLog.log',maxBytes=100000,backupCount=10,encoding='utf-8') #this is non-blocking
+queue_listener = QueueListener(log_queue,rot_queue_handler) #apparently in its own thread
+queue_listener.start()
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+logger.addHandler(rot_queue_handler) #and the handler is attached to the logger
+
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+rot_queue_handler.setFormatter(formatter)
+logger.debug('PyState initiated')
+
 '''Block of variables and calls for peristaltic pump i2c control.
 I need to doublecheck the below block's values before 1st run.'''
 channel = 1 #need to confirm when running this way
@@ -128,16 +152,16 @@ primeTimeAcidPump = 5.0
 primeTimeExcessPump = 5.0
 pumpCal = 0.581395 #sec/mL, averaged across the three pumps
 #apparently the code can hang if the pumps are issued start commands when already running, so make sure they're off
-shutOffPump(boardAddr,addrSWPump,bus)
-shutOffPump(boardAddr,addrAcidPump,bus)
-shutOffPump(boardAddr,addrExcessPump,bus)
+shutOffPump(boardAddr,addrSWPump,bus,__name__)
+shutOffPump(boardAddr,addrAcidPump,bus,__name__)
+shutOffPump(boardAddr,addrExcessPump,bus,__name__)
 time.sleep(1.0)
 #briefly prime the pumps on script start
-runPump(addrSWPump,primeTimeSWPump)
+runPump(addrSWPump,primeTimeSWPump,__name__)
 time.sleep(1.0)
-runPump(addrAcidPump,primeTimeAcidPump)
+runPump(addrAcidPump,primeTimeAcidPump,__name__)
 time.sleep(1.0)
-runPump(addrExcessPump,primeTimeExcessPump)
+runPump(addrExcessPump,primeTimeExcessPump,__name__)
 
 '''Start of main code'''
 maxFileSize = 100000
@@ -215,12 +239,14 @@ while True:
             killTail(f) #...kill the old tail process...
             f, p = startTail(logName) #...and start a new one.
             print('Active log: ' + logName)
+            logger.info('Active log:'+logName)
         #the below line (and function) is redundant now, right?
         isNew, logName = logOverSwap(logName) #each cycle, check if PyLog iterated the log file for size reasons        
         if isNew: #if it did...
             killTail(f) #...kill the old tail process...
             f, p = startTail(logName) #...and start a new one.
             print('Active log: ' + logName)
+            logger.info('Active log:'+logName)
         
         '''Then we grab the last line from the most current log file'''
         #call the tail command, then wait 1 second and try again
@@ -296,7 +322,10 @@ while True:
             if ((time.monotonic() - lastLongTime) > 60):
                 lastLongTime = time.monotonic()
                 
-                curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]                
+                curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]
+                delimArrayString = (str(lastLongTime)+':'+str(CO2volts)+':'+str(pHval)+':'+str(PARval)+':'+
+                                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
+                                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))                
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
                         longVals.loc[longIndex] = curArray
@@ -308,6 +337,7 @@ while True:
                 print("60 sec interval recorded") # just temp line for debugging
                 print(longVals) # just temp line for debugging
                 print("Avg pH rate:",longdPHdT) #just temp line for debugging
+                logger.info('60s interval values:'+str(delimArrayString))
             
         '''Apparently, the seawater cycling should happen on a regular schedule'''
         '''To avoid pausing this script, another script and timer should
@@ -319,6 +349,7 @@ while True:
         match state:
             case 40:
                 if state != lastState:
+                    logger.info('State change:'+str(state))
                     print("Acidification")
                     lastState = state
                     #Make sure timer completion flags are currently set to "finished"
@@ -333,13 +364,13 @@ while True:
                 #then check if we've triggered our pH limit or we have too much volume
                 if (acidVolAdded <= 15) and (pHval > pHset):
                     if justPumped = False: #first time running pump
-                        runPump(addrAcidPump,pumpCal*1) #run pump for first time, for 1 mL
+                        runPump(addrAcidPump,pumpCal*1,__name__) #run pump for first time, for 1 mL
                         justPumped = True
                         myReactor._pumpOrMsr = True #set state to pumping, not measuring
                         pumpWaitTimer(myReactor,False,60.0) #set minor timer to 1 minute
                         acidVolAdded = acidVolAdded + 1 #add to acidVolAdded
                     elif myReactor.curMinorTimer(): #just pumped AND timer finished; true means the timer has finished
-                        runPump(addrAcidPump,pumpCal*1)
+                        runPump(addrAcidPump,pumpCal*1,__name__)
                         pumpWaitTimer(myReactor,False,60.0) 
                         acidVolAdded = acidVolAdded + 1 
                     else: #just pumped, but timer is not finished
@@ -353,6 +384,7 @@ while True:
                     
             case 50:
                 if state != lastState:
+                    logger.info('State change:'+str(state))
                     print("Watch CO2")
                     lastState = state
                     #Make sure timer completion flags are currently set to "finished"
@@ -382,6 +414,7 @@ while True:
                     
             case 60:
                 if state != lastState:
+                    logger.info('State change:'+str(state))
                     print("Incubate")
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
@@ -404,11 +437,12 @@ while True:
                 
             case 71:
                 if state != lastState:
+                    logger.info('State change:'+str(state))
                     print("Dilute part a")
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
-                    runPump(addrExcessPump,pumpCal*dilutionVol) #run pump for 5 L
+                    runPump(addrExcessPump,pumpCal*dilutionVol,__name__) #run pump for 5 L
                     justPumped = True
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
                     pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
@@ -418,11 +452,12 @@ while True:
                     
             case 72:
                 if state != lastState:
+                    logger.info('State change:'+str(state))
                     print("Dilute part b")
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
-                    runPump(addrSWPump,pumpCal*dilutionVol) #run pump for 5 L
+                    runPump(addrSWPump,pumpCal*dilutionVol,__name__) #run pump for 5 L
                     justPumped = True
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
                     pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
@@ -435,9 +470,9 @@ while True:
                 print("Undefined bioreactor state")
                 #if we get here, just close out
                 bus = smbus.SMBus(channel)
-                shutOffPump(boardAddr,addrSWPump,bus)
-                shutOffPump(boardAddr,addrAcidPump,bus)
-                shutOffPump(boardAddr,addrExcessPump,bus)
+                shutOffPump(boardAddr,addrSWPump,bus,__name__)
+                shutOffPump(boardAddr,addrAcidPump,bus,__name__)
+                shutOffPump(boardAddr,addrExcessPump,bus,__name__)
                 killTail(f)
                 sys.exit()
         
@@ -445,9 +480,9 @@ while True:
         #make sure to kill the tail command, if the command is exited manually
         killTail(f)
         #and kill pumps
-        shutOffPump(boardAddr,addrSWPump,bus)
-        shutOffPump(boardAddr,addrAcidPump,bus)
-        shutOffPump(boardAddr,addrExcessPump,bus)
+        shutOffPump(boardAddr,addrSWPump,bus,__name__)
+        shutOffPump(boardAddr,addrAcidPump,bus,__name__)
+        shutOffPump(boardAddr,addrExcessPump,bus,__name__)
         #Make sure timers are complete
         TimerCnt = 0
         while (len(threading.enumerate()) > 1):
@@ -461,6 +496,7 @@ while True:
                 TimerCnt = 0
                 time.sleep(1.0)
         time.sleep(1.0)
+        logger.warning('PyState closed by KeyboardInterrupt')
         sys.exit()
         '''Not sure what to do if the script process crashes. This system may not
         run long enough for that to matter, though, as we don't expect a loop which
