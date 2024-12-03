@@ -135,7 +135,7 @@ logger.setLevel(logging.DEBUG)
 
 logger.addHandler(rot_queue_handler) #and the handler is attached to the logger
 
-formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s', datefmt='%m/%d/%Y:%I:%M:%S %p')
 rot_queue_handler.setFormatter(formatter)
 logger.debug('PyState initiated')
 
@@ -169,6 +169,7 @@ maxFileSize = 100000
 try:
     logName = findNewLog('*.csv')
     print('Active log: ' + logName)
+    logger.info('Active log:'+logName)
 except:
     print('File search failed')
     sys.exit()
@@ -215,6 +216,7 @@ CO2_set = 400 #in ppm, post converstion from voltage
 tempCO2 = CO2_set #just a changeable placeholder value
 dPHdT_set = 0.2 #pH units / hour; can change this later
 dilutionVol = 5000
+overflow = int(0) #0 for no, 1 for float SW in acidify, 2 for float SW in dilution
 
 myReactor = BioReactor.Reactor(BioReactor.Acidification())
 print("State number:",myReactor._state.stateNumber)
@@ -348,38 +350,47 @@ while True:
         state = myReactor._state.stateNumber
         match state:
             case 40:
-                if state != lastState:
-                    logger.info('State change:'+str(state))
-                    print("Acidification")
-                    lastState = state
-                    #Make sure timer completion flags are currently set to "finished"
-                    switchTimerFlag(myReactor,True,True) #major timer
-                    switchTimerFlag(myReactor,False,True) #minor timer
-                    justPumped = False #reset flag for having run acid pump
-                    myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
-                
-                #Below block commented out for testing purposes, 10-4-24
-                '''#in acidification, we add 1 mL of acid at a time, up to 15
-                #after adding each mL, we wait 1 minute
-                #then check if we've triggered our pH limit or we have too much volume
-                if (acidVolAdded <= 15) and (pHval > pHset):
-                    if justPumped = False: #first time running pump
-                        runPump(addrAcidPump,pumpCal*1,__name__) #run pump for first time, for 1 mL
-                        justPumped = True
-                        myReactor._pumpOrMsr = True #set state to pumping, not measuring
-                        pumpWaitTimer(myReactor,False,60.0) #set minor timer to 1 minute
-                        acidVolAdded = acidVolAdded + 1 #add to acidVolAdded
-                    elif myReactor.curMinorTimer(): #just pumped AND timer finished; true means the timer has finished
-                        runPump(addrAcidPump,pumpCal*1,__name__)
-                        pumpWaitTimer(myReactor,False,60.0) 
-                        acidVolAdded = acidVolAdded + 1 
-                    else: #just pumped, but timer is not finished
-                        pass
+                if floatSW == 1:
+                    if state != lastState:
+                        logger.info('State change:'+str(state))
+                        print("Acidification")
+                        lastState = state
+                        #Make sure timer completion flags are currently set to "finished"
+                        switchTimerFlag(myReactor,True,True) #major timer
+                        switchTimerFlag(myReactor,False,True) #minor timer
+                        justPumped = False #reset flag for having run acid pump
+                        myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
+                    
+                    #Below block commented out for testing purposes, 10-4-24
+                    #in acidification, we add 1 mL of acid at a time, up to 15
+                    #after adding each mL, we wait 1 minute
+                    #then check if we've triggered our pH limit or we have too much volume
+                    if (acidVolAdded <= 15) and (pHval > pHset):
+                        if justPumped == False: #first time running pump
+                            runPump(addrAcidPump,pumpCal*1,__name__) #run pump for first time, for 1 mL
+                            justPumped = True
+                            myReactor._pumpOrMsr = True #set state to pumping, not measuring
+                            pumpWaitTimer(myReactor,False,60.0) #set minor timer to 1 minute
+                            acidVolAdded = acidVolAdded + 1 #add to acidVolAdded
+                        elif myReactor.curMinorTimer(): #just pumped AND timer finished; true means the timer has finished
+                            runPump(addrAcidPump,pumpCal*1,__name__)
+                            pumpWaitTimer(myReactor,False,60.0) 
+                            acidVolAdded = acidVolAdded + 1 
+                        else: #just pumped, but timer is not finished
+                            pass
+                    else:
+                        myReactor._pumpOrMsr = False #measuring, not pumping
+                        myReactor.nextState(50) #change to "Watch CO2"
+                                
+                    overflow = 0
+                    #myReactor.curPumpAction(): #just a leftover line to remember the function name
                 else:
-                    myReactor._pumpOrMsr = False #measuring, not pumping
-                    myReactor.nextState(50) #change to "Watch CO2"
-                               
-                #myReactor.curPumpAction(): #just a leftover line to remember the function name'''
+                    overflow = 1
+                    #Note- the below only runs if the float switch was active during the last read (~5-7 seconds ago)
+                    #So if the float switch goes high again while waiting for the pump timer to finish, it goes back to acidify
+                    if myReactor.curMinorTimer(): #make sure pump isn't running
+                        myReactor._pumpOrMsr = False
+                        myReactor.nextState(71) #switch to dilution
                 
                     
             case 50:
@@ -437,18 +448,41 @@ while True:
                 
             case 71:
                 if state != lastState:
+                    actualDilVol = dilutionVol
+                    if floatSW == 1 and overflow == 1:
+                        actualDilVol = 100 #will excess 100 mL if we hit the limit switch during acidification
+                    elif floatSW == 1 and overflow == 2:
+                        actualDilVol = 1000 #will excess 1 L if we hit the limit switch during dilution
                     logger.info('State change:'+str(state))
                     print("Dilute part a")
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
-                    runPump(addrExcessPump,pumpCal*dilutionVol,__name__) #run pump for 5 L
+                    runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
                     justPumped = True
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
-                    pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
+                    pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
                 
-                if myReactor.curMinorTimer(): #when pump is done...
-                    myReactor.nextState(72) #...move on to SW addition
+                if myReactor.curMinorTimer(): #When pump is done...
+                    if floatSW < 1 and overflow == 0: #...if we got here from Watch CO2...
+                        justPumped = False
+                        myReactor._pumpOrMsr = False
+                        myReactor.nextState(72) #...move on to seawater addition.
+                    elif floatSW < 1 and overflow == 1: #...if we got here from acidification and overflow but float SW back down...
+                        overflow = 0 #...reset...
+                        justPumped = False
+                        myReactor._pumpOrMsr = False
+                        myReactor.nextState(40) #...and go back to acidification.
+                    elif floatSW < 1 and overflow == 2: #...if we got here from acidification and overflow but float SW back down...
+                        overflow = 0 #...reset...
+                        justPumped = False
+                        myReactor._pumpOrMsr = False
+                        myReactor.nextState(60) #...and go to incubation.
+                    elif floatSW == 1: #...if we haven't excessed enough...
+                        runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
+                        justPumped = True
+                        myReactor._pumpOrMsr = True
+                        pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
                     
             case 72:
                 if state != lastState:
@@ -462,9 +496,15 @@ while True:
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
                     pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
                 
-                if myReactor.curMinorTimer() or (longVals.loc[60]['Last FloatSW'].astype(float) < 1): #when pump is done or float switch active...
-                    myReactor.nextState(60) #...incubate new mixture a little
-                    myReactor._pumpOrMsr = False #set state to measuring
+                if myReactor.curMinorTimer() or (floatSW < 1): #when pump is done or float switch active...
+                    if floatSW < 1:
+                        shutOffPump(boardAddr,addrSWPump,bus,__name__) #turn off pump early
+                        switchTimerFlag(myReactor,False,True) #turn off minor timer flag
+                        overflow = 2
+                        myReactor.nextState(71) #go back to dilute part A (excess)
+                    else:
+                        myReactor.nextState(60) #...incubate new mixture a little
+                        myReactor._pumpOrMsr = False #set state to measuring
                     
             case _:
                 print("Undefined bioreactor state")

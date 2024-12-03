@@ -42,4 +42,16 @@ while True:
     except KeyboardInterrupt:
         b.close()
         print("File closed")
+        ser.close()
+        print("Serial port closed")
         sys.exit()
+    except serial.SerialException:
+        print("Serial error. Trying to reinitialize.")
+        try:
+            ser.close()
+            print("Port closed")
+            ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
+            print("Port reinitialized")
+        except:
+            print("Unable to reinitialize, closing PyLog.")
+            sys.exit()

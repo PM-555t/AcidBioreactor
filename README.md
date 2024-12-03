@@ -10,3 +10,13 @@ Operates a sequence of 3 pumps to appropriately mix acid effluent and seawater (
 
 # Dated notes:
 - 10/9/2024 - SensorTx_v2.ino currently uploaded to Arduino. In PyState_v0.py, acidification state code is commented out to prevent pumps from running without any liquid. LICOR CO2 calibration has not been coded in anywhere; since PyState still creates a variable called "CO2 Volts", the volts-to-ppm conversion should probably be done there; this will also be simpler to manage during remote coding than making edits on the Arduino, which require manual connection. PyLog is hardcoded to /dev/ttyACM0 for now!!! Important to remember since the Pi has no requirement to keep the device name static (i.e. it could be ACM1 or ACM2 on connection loss). Also, pH and DO probes have not been calibrated and so are likely to provide erronous readings upon liquid contact.
+
+# Running checklist:
+- [x] Deal with PyLog possibly losing connection.
+- [ ] Test Float switch
+    - [x] PyState : Move float switch check to main loop
+    - [x] PyState : Edit state code (and BioReactor object to allow it); if in [Acidify], excess until the switch turns off and then some extra. If in [Dilution_B], excess 1 L and go to [Incubate].
+    - [ ] Check and test edited code
+- [x] PyState : Fix log datetime formatting to put colon between date and hour.
+- [ ] Physically test which pump isn't able to draw liquid.
+- [x] Make this checklist!

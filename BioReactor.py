@@ -96,6 +96,9 @@ class Acidification(State):
         if which == 50:
             print('Moving to "Watch CO2"')
             self.reactor.setReactor(watchCO2())
+        elif which == 71:
+            print("Moving to Dilute Part A")
+            self.reactor.setReactor(diluteA())
         else:
             print(f'Cannot transition from {self._stateNumber} to {which}')
 
@@ -135,6 +138,12 @@ class diluteA(State):
         if which == 72:
             print('Moving to "Dilute Part B"')
             self.reactor.setReactor(diluteB())
+        elif which == 40:
+            print('Moving to "Acidification"')
+            self.reactor.setReactor(Acidification())
+        elif which == 60:
+            print('Moving to "Incubation"')
+            self.reactor.setReactor(Incubate())
         else:
             print(f'Cannot transition from {self._stateNumber} to {which}')
 
@@ -146,6 +155,9 @@ class diluteB(State):
         if which == 60:
             print('Moving to "Incubate"')
             self.reactor.setReactor(Incubate())
+        if which == 71:
+            print('Moving to "Dilute Part A"')
+            self.reactor.setReactor(diluteA())
         else:
             print(f'Cannot transition from {self._stateNumber} to {which}')
 
