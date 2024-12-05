@@ -11,6 +11,7 @@ from pathlib import Path
 import threading
 import smbus
 import BioReactor
+import _thread
 
 '''Send start command, then after x seconds...'''
 def runPump(addr, seconds, loggername):
@@ -217,6 +218,7 @@ tempCO2 = CO2_set #just a changeable placeholder value
 dPHdT_set = 0.2 #pH units / hour; can change this later
 dilutionVol = 5000
 overflow = int(0) #0 for no, 1 for float SW in acidify, 2 for float SW in dilution
+floatReleaseAttempts = int(0)
 
 myReactor = BioReactor.Reactor(BioReactor.Acidification())
 print("State number:",myReactor._state.stateNumber)
@@ -383,9 +385,11 @@ while True:
                         myReactor.nextState(50) #change to "Watch CO2"
                                 
                     overflow = 0
+                    logger.warning("Overflow state set to --> "+str(overflow))
                     #myReactor.curPumpAction(): #just a leftover line to remember the function name
                 else:
                     overflow = 1
+                    logger.warning("Overflow state set to --> "+str(overflow))
                     #Note- the below only runs if the float switch was active during the last read (~5-7 seconds ago)
                     #So if the float switch goes high again while waiting for the pump timer to finish, it goes back to acidify
                     if myReactor.curMinorTimer(): #make sure pump isn't running
@@ -453,6 +457,7 @@ while True:
                         actualDilVol = 100 #will excess 100 mL if we hit the limit switch during acidification
                     elif floatSW == 1 and overflow == 2:
                         actualDilVol = 1000 #will excess 1 L if we hit the limit switch during dilution
+                    floatReleaseAttempts = 0
                     logger.info('State change:'+str(state))
                     print("Dilute part a")
                     lastState = state
@@ -470,19 +475,25 @@ while True:
                         myReactor.nextState(72) #...move on to seawater addition.
                     elif floatSW < 1 and overflow == 1: #...if we got here from acidification and overflow but float SW back down...
                         overflow = 0 #...reset...
+                        logger.warning("Overflow state set to --> "+str(overflow))
                         justPumped = False
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(40) #...and go back to acidification.
-                    elif floatSW < 1 and overflow == 2: #...if we got here from acidification and overflow but float SW back down...
+                    elif floatSW < 1 and overflow == 2: #...if we got here from Dilution B (seawater) and overflow but float SW back down...
                         overflow = 0 #...reset...
+                        logger.warning("Overflow state set to --> "+str(overflow))
                         justPumped = False
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(60) #...and go to incubation.
                     elif floatSW == 1: #...if we haven't excessed enough...
+                        if floatReleaseAttempts > 2:
+                            logger.error('Exiting. Float switch is stuck, or liquid not leaving chamber.')
+                            _thread.interrupt_main() #calls keyboard interrupt to exit for safety reasons
                         runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
                         justPumped = True
                         myReactor._pumpOrMsr = True
                         pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
+                        floatReleaseAttempts = floatReleaseAttempts + 1
                     
             case 72:
                 if state != lastState:
@@ -501,12 +512,14 @@ while True:
                         shutOffPump(boardAddr,addrSWPump,bus,__name__) #turn off pump early
                         switchTimerFlag(myReactor,False,True) #turn off minor timer flag
                         overflow = 2
+                        logger.warning("Overflow state set to --> "+str(overflow))
                         myReactor.nextState(71) #go back to dilute part A (excess)
                     else:
                         myReactor.nextState(60) #...incubate new mixture a little
                         myReactor._pumpOrMsr = False #set state to measuring
                     
             case _:
+                logger.error('Undefined bioreactor state.')
                 print("Undefined bioreactor state")
                 #if we get here, just close out
                 bus = smbus.SMBus(channel)
