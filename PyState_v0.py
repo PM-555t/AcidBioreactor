@@ -135,7 +135,7 @@ logger.setLevel(logging.DEBUG)
 
 logger.addHandler(rot_queue_handler) #and the handler is attached to the logger
 
-formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s', datefmt='%m/%d/%Y:%I:%M:%S %p')
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s', datefmt='%m/%d/%Y:%I:%M:%S:%p')
 rot_queue_handler.setFormatter(formatter)
 logger.debug('PyState initiated')
 
