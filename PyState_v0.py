@@ -163,6 +163,7 @@ time.sleep(1.0)
 runPump(addrAcidPump,primeTimeAcidPump,__name__)
 time.sleep(1.0)
 runPump(addrExcessPump,primeTimeExcessPump,__name__)
+time.sleep(6.0) #allow priming to complete before we get into state code
 
 '''Start of main code'''
 maxFileSize = 100000
@@ -339,7 +340,7 @@ while True:
                         longVals = longVals.loc[:].shift(periods=-1,axis=0)
                         longVals.loc[60] = curArray
                 print("60 sec interval recorded") # just temp line for debugging
-                print(longVals) # just temp line for debugging
+                #print(longVals) # just temp line for debugging
                 print("Avg pH rate:",longdPHdT) #just temp line for debugging
                 logger.info('60s interval values:'+str(delimArrayString))
             
@@ -453,9 +454,9 @@ while True:
             case 71:
                 if state != lastState:
                     actualDilVol = dilutionVol
-                    if floatSW == 1 and overflow == 1:
+                    if overflow == 1:
                         actualDilVol = 100 #will excess 100 mL if we hit the limit switch during acidification
-                    elif floatSW == 1 and overflow == 2:
+                    elif overflow == 2:
                         actualDilVol = 1000 #will excess 1 L if we hit the limit switch during dilution
                     floatReleaseAttempts = 0
                     logger.info('State change:'+str(state))
@@ -469,31 +470,32 @@ while True:
                     pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
                 
                 if myReactor.curMinorTimer(): #When pump is done...
-                    if floatSW < 1 and overflow == 0: #...if we got here from Watch CO2...
+                    if floatSW == 1 and overflow == 0: #...if we got here from Watch CO2...
                         justPumped = False
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(72) #...move on to seawater addition.
-                    elif floatSW < 1 and overflow == 1: #...if we got here from acidification and overflow but float SW back down...
+                    elif floatSW == 1 and overflow == 1: #...if we got here from acidification and overflow but float SW back down...
                         overflow = 0 #...reset...
                         logger.warning("Overflow state set to --> "+str(overflow))
                         justPumped = False
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(40) #...and go back to acidification.
-                    elif floatSW < 1 and overflow == 2: #...if we got here from Dilution B (seawater) and overflow but float SW back down...
+                    elif floatSW == 1 and overflow == 2: #...if we got here from Dilution B (seawater) and overflow but float SW back down...
                         overflow = 0 #...reset...
                         logger.warning("Overflow state set to --> "+str(overflow))
                         justPumped = False
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(60) #...and go to incubation.
-                    elif floatSW == 1: #...if we haven't excessed enough...
+                    elif floatSW < 1: #...if we haven't excessed enough...
                         if floatReleaseAttempts > 2:
                             logger.error('Exiting. Float switch is stuck, or liquid not leaving chamber.')
                             _thread.interrupt_main() #calls keyboard interrupt to exit for safety reasons
                         runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
                         justPumped = True
                         myReactor._pumpOrMsr = True
-                        pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
+                        pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)) #set minor timer to pump time + delay
                         floatReleaseAttempts = floatReleaseAttempts + 1
+                        print("Attempted to relieve float switch "+str(floatReleaseAttempts)+" times.")
                     
             case 72:
                 if state != lastState:

@@ -13,10 +13,11 @@ Operates a sequence of 3 pumps to appropriately mix acid effluent and seawater (
 
 # Running checklist:
 - [x] Deal with PyLog possibly losing connection.
+    - [ ] Made further changes, make sure PyLog closes on start or reattempts mid-script.
 - [ ] Test Float switch
     - [x] PyState : Move float switch check to main loop
     - [x] PyState : Edit state code (and BioReactor object to allow it); if in [Acidify], excess until the switch turns off and then some extra. If in [Dilution_B], excess 1 L and go to [Incubate].
     - [ ] Check and test edited code
 - [x] PyState : Fix log datetime formatting to put colon between date and hour.
-- [ ] Physically test which pump isn't able to draw liquid.
+- [x] Physically test which pump isn't able to draw liquid.
 - [x] Make this checklist!

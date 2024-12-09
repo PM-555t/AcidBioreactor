@@ -7,7 +7,11 @@ import sys
 import os
 from pathlib import Path
 
-ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
+try:
+    ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
+except Exception as e:
+    print("Unable to open serial port, with error: "+str(e))
+    sys.exit()
 
 logName = datetime.datetime.today().strftime('%Y%m%d_%H%M') + '.csv'
 
@@ -18,6 +22,7 @@ lineRead = []
 #since the readline() only occurs when the Arduino passes one (every 6 seconds), this loop is triggered by that send
 while True:
     try:
+        serialAttempts = 0
         x = ser.readline() #get line
         now = datetime.datetime.today().strftime('%H:%M:%S') #get current time
         
@@ -47,11 +52,19 @@ while True:
         sys.exit()
     except serial.SerialException:
         print("Serial error. Trying to reinitialize.")
-        try:
-            ser.close()
-            print("Port closed")
-            ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
-            print("Port reinitialized")
-        except:
-            print("Unable to reinitialize, closing PyLog.")
+        while serialAttempts < 3:
+            try:
+                ser.close()
+                print("Port closed")
+                time.sleep(1.0)
+                ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
+                print("Port reinitialized")
+                serialAttemps = 3 #just to skip back out to main loop
+            except:
+                serialAttempts = serialAttempts + 1
+                print("Unable to reinitialize port on attempt: "+str(serialAttempts))
+                time.sleep(3.0)
+
+        if not (serialAttempts < 3):
+            print("Unable to reinitialize serial port, closing PyLog.")
             sys.exit()

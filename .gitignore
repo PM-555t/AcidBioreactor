@@ -1,6 +1,7 @@
 #data
 /data
 /.vscode
+StateMachineLog.log
 
 #sensitive information
 
@@ -18,4 +19,5 @@ shmWriteTest.py
 SMtests/
 example.log
 example2.log
+PyState_v0_Test_12-6-24.py
 /Keithley
