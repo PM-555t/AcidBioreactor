@@ -384,11 +384,15 @@ while True:
                     else:
                         myReactor._pumpOrMsr = False #measuring, not pumping
                         myReactor.nextState(50) #change to "Watch CO2"
-                                
-                    overflow = 0
-                    logger.warning("Overflow state set to --> "+str(overflow))
+
+                    if overflow != 0:            
+                        overflow = 0
+                        logger.warning("Overflow state set to --> "+str(overflow))
+                    
                     #myReactor.curPumpAction(): #just a leftover line to remember the function name
                 else:
+                    shutOffPump(boardAddr,addrAcidPump,bus,__name__) #turn off pump early
+                    switchTimerFlag(myReactor,False,True) #turn off minor timer flag
                     overflow = 1
                     logger.warning("Overflow state set to --> "+str(overflow))
                     #Note- the below only runs if the float switch was active during the last read (~5-7 seconds ago)
