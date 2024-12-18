@@ -14,6 +14,7 @@ StateMachineLog.log
 #screwaround tests
 codeScribbles.py
 codeScribbles2.py
+codeScribbles3.py
 serial_in_test.py
 shmWriteTest.py
 SMtests/

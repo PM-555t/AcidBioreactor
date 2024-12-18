@@ -18,11 +18,11 @@ logName = datetime.datetime.today().strftime('%Y%m%d_%H%M') + '.csv'
 #variables
 writeStr = ""
 lineRead = []
+serialAttempts = 0
 
 #since the readline() only occurs when the Arduino passes one (every 6 seconds), this loop is triggered by that send
 while True:
     try:
-        serialAttempts = 0
         x = ser.readline() #get line
         now = datetime.datetime.today().strftime('%H:%M:%S') #get current time
         
@@ -59,7 +59,8 @@ while True:
                 time.sleep(1.0)
                 ser = serial.Serial(port='/dev/ttyACM0',baudrate=115200)
                 print("Port reinitialized")
-                serialAttemps = 3 #just to skip back out to main loop
+                serialAttempts = 0 #for next time USB lost
+                break #2024-12-12: I think this is the right level, but it needs to be tested
             except:
                 serialAttempts = serialAttempts + 1
                 print("Unable to reinitialize port on attempt: "+str(serialAttempts))
