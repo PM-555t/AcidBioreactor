@@ -180,7 +180,7 @@ print(str(f) + ',' + str(p))
 
 #set up table for reading in log values
 recentVals = pd.DataFrame(index=[1,2,3,4,5,6,7,8,9,10],columns=['Time','frame key','CO2','pH','PAR','DO',
-                                                     'Pressure','Temperature','DO_code','pH_code','FloatSW','d(pH)/dt'])
+                                                     'Pressure','Temperature','DO_code','pH_code','FloatSW'])
 longVals = pd.DataFrame(index=pd.RangeIndex(start=1, stop=61, step=1),columns=['Time','CO2','pH','PAR','DO',
                                                      'Pressure','Temperature','DO_code','pH_code','Last FloatSW','d(pH)/dt'])
 recentVals.fillna(0)
@@ -279,15 +279,7 @@ while True:
             else:
                 sameLine = (recentVals.loc[dfIndex-1]['Time'] == test[0])
             if not sameLine: #if the line isn't the same as the one being inserted
-                if dfIndex == 1:
-                    dPHdT = 0.0
-                else:
-                    dPH = (float(test[3])-float(recentVals.loc[dfIndex-1]['pH']))
-                    dT = (strSecDiff(recentVals.loc[dfIndex-1]['Time'],test[0])/3600)
-                    dPHdT =  dPH / dT
-                    if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.02): #catch little fluctuations
-                        dPHdT = 0.0
-                recentVals.loc[dfIndex] = test + [dPHdT]
+                recentVals.loc[dfIndex] = test #+ [dPHdT]
                 recentVals.loc[dfIndex]['CO2'] = float(recentVals.loc[dfIndex]['CO2']) * CO2cal
                 dfIndex = dfIndex + 1
                 valChange = True
@@ -296,15 +288,8 @@ while True:
         else: #and then iterate down 1 row each sampling period
             sameLine = (recentVals.loc[10]['Time'] == test[0])
             if not sameLine:
-                dPH = (float(test[3])-float(recentVals.loc[10]['pH']))
-                dT = (strSecDiff(recentVals.loc[10]['Time'],test[0])/3600)
-                dPHdT = dPH / dT #so this is a single point FBD; replace with more intelligent derivative in the future
-                
-                if (abs(dPHdT) > 0.02) and (abs(dPH) < 0.02): #catch little fluctuations
-                        dPHdT = 0.0
-                
                 recentVals = recentVals.loc[:].shift(periods=-1,axis=0) #dont use fill_values because zeros affect mean
-                recentVals.loc[10] = test + [dPHdT]
+                recentVals.loc[10] = test #+ [dPHdT]
                 recentVals.loc[10]['CO2'] = float(recentVals.loc[10]['CO2']) * CO2cal
                 valChange = True
             else:
@@ -312,7 +297,7 @@ while True:
         
         '''If we actually have a new reading, then capture our averaged readings'''
         if valChange: 
-            print(test + [dPHdT])
+            print(test)
             CO2volts = recentVals['CO2'].astype(float).mean() #as of 10/15, is actually CO2 ppm
             pHval = recentVals['pH'].astype(float).mean()
             PARval = recentVals['PAR'].astype(float).mean()
@@ -322,15 +307,37 @@ while True:
             DOcode = int(test[8])
             pHcode = int(test[9])
             floatSW = int(test[10])
-            longdPHdT = recentVals['d(pH)/dt'].astype(float).mean()
+            
             #and insert our averaged readings into the long form table, if it's been long enough
             if ((time.monotonic() - lastLongTime) > 60):
+
+                '''20241220 - code block inserted to calculate dPHdT as a moving average of
+                the short table, as opposed to an average of "instant" dPHdT values'''
+                if longIndex < 2:
+                    longdPHdT = 0.0
+                else:
+                    dPH = pHval - longVals.loc[longIndex-1]['pH'] #(current average of last 60 seconds) - (last average of previous 60 seconds)
+                    if dPH < 0.001:
+                        dPH = 0
+                    if dfIndex < 11:
+                        if dfIndex == 1:
+                            dT = 1000000000
+                        else:
+                            dT = (strSecDiff(recentVals.loc[1]['Time'],recentVals.loc[dfIndex-1]['Time'])/3600)
+                    else:
+                        dT = (strSecDiff(recentVals.loc[1]['Time'],recentVals.loc[10]['Time'])/3600)
+                    longdPHdT = dPH / dT #pH units per hour
+                    logger.debug("dPH:"+str(dPH)+":dT:"+str(dT)+":dPHdT:"+str(longdPHdT))
+                    #print("Current dPH: "+str(dPH)+", dT: "+str(dT)+", dPHdT: "+str(longdPHdT))
+                '''End 20241220 insert'''
+
                 lastLongTime = time.monotonic()
                 
                 curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]
                 delimArrayString = (str(lastLongTime)+':'+str(CO2volts)+':'+str(pHval)+':'+str(PARval)+':'+
                                     str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
-                                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))                
+                                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
+                
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
                         longVals.loc[longIndex] = curArray
@@ -340,8 +347,6 @@ while True:
                         longVals = longVals.loc[:].shift(periods=-1,axis=0)
                         longVals.loc[60] = curArray
                 print("60 sec interval recorded") # just temp line for debugging
-                #print(longVals) # just temp line for debugging
-                print("Avg pH rate:",longdPHdT) #just temp line for debugging
                 logger.info('60s interval values:'+str(delimArrayString))
             
         '''Apparently, the seawater cycling should happen on a regular schedule'''
@@ -414,19 +419,26 @@ while True:
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
                     pumpWaitTimer(myReactor,True,3600)#start major timer for 1 hr
                     if longIndex > 1: #don't trust table or reading at first row
-                        CO2_max = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
+                        if longIndex == 61:
+                            CO2_max = longVals.loc[longIndex - 1]['CO2'] * CO2cal #convert from volts to ppm
+                        else:
+                            CO2_max = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
                     else:
                         CO2_max = CO2_set #basically just assuming CO2 = setpoint
                     
                 #every loop, update current max CO2 reading
                 tempCO2 = CO2_set
                 if longIndex > 1: #don't trust table or reading at first row
-                    tempCO2 = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
+                    if longIndex == 61:
+                        tempCO2 = longVals.loc[longIndex-1]['CO2'] * CO2cal #convert from volts to ppm
+                    else:
+                        tempCO2 = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
                 if tempCO2 > CO2_max:
                     CO2_max = tempCO2
                     
                 #when timer is up, make decision --> low CO2 goes to S71, high CO2 goes to S60
                 if myReactor.curMajorTimer(): #if the hour timer has finished...
+                    logger.info('CO2_max = '+str(CO2_max))
                     if CO2_max < CO2_set:
                         myReactor.nextState(71) #move to dilution, too much algae is consuming too much CO2
                     else:
@@ -447,11 +459,13 @@ while True:
                     absMaxPhRate = abs(longVals.loc[30:60]['d(pH)/dt'].astype(float).max())
                     currpH = longVals.loc[58:60]['pH'].astype(float).mean() #average the last 3 minutes
                     
+                    logger.info('Incubate; pH change rate: '+str(absMaxPhRate)+', avg pH: '+str(currpH))
                     if (absMaxPhRate < dPHdT_set) and ((currpH - pHset) < 0.5): #to make basic again
                         myReactor.nextState(71)
                     elif (absMaxPhRate < dPHdT_set) and ((currpH - pHset) > 0.5): #to bring pH back down
                         myReactor.nextState(40)                   
                     else: #if rate > set, reset the major timer to 10 minutes to check again
+                        logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
                         pumpWaitTimer(myReactor,True,600)
                     #This is where the code can get stuck but it's probably best that nothing is running if the pH probe is throwing wacky values
                 
