@@ -1,0 +1,8 @@
+01/08/2025 07:16:36 AM:DEBUG:<module>:This message should go to the log file
+01/08/2025 07:16:36 AM:DEBUG:threadTest:Did this work?
+01/08/2025 07:16:36 AM:DEBUG:<module>:and after
+01/08/2025 07:16:36 AM:INFO:<module>:60s interval values:2342516.747:1956:6.546
+01/08/2025 07:17:06 AM:DEBUG:<module>:This message should go to the log file
+01/08/2025 07:17:06 AM:DEBUG:threadTest:Did this work?
+01/08/2025 07:17:06 AM:DEBUG:<module>:and after
+01/08/2025 07:17:06 AM:INFO:<module>:60s interval values:2342516.747:1956:6.546

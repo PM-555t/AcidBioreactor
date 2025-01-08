@@ -157,13 +157,21 @@ shutOffPump(boardAddr,addrSWPump,bus,__name__)
 shutOffPump(boardAddr,addrAcidPump,bus,__name__)
 shutOffPump(boardAddr,addrExcessPump,bus,__name__)
 time.sleep(1.0)
-#briefly prime the pumps on script start
-runPump(addrSWPump,primeTimeSWPump,__name__)
-time.sleep(1.0)
-runPump(addrAcidPump,primeTimeAcidPump,__name__)
-time.sleep(1.0)
-runPump(addrExcessPump,primeTimeExcessPump,__name__)
-time.sleep(6.0) #allow priming to complete before we get into state code
+
+#briefly prime the pumps on script start, if the user wants to
+toPrime = input('Do you want to prime the pumps? Type [y/n] and press enter.\n')
+if toPrime == 'y':
+    print('Pumps primed.')
+    logger.info('Pumps primed.')
+    runPump(addrSWPump,primeTimeSWPump,__name__)
+    time.sleep(1.0)
+    runPump(addrAcidPump,primeTimeAcidPump,__name__)
+    time.sleep(1.0)
+    runPump(addrExcessPump,primeTimeExcessPump,__name__)
+    time.sleep(6.0) #allow priming to complete before we get into state code
+else:
+    print('Pumps not primed.')
+    logger.info('Pumps not primed.')
 
 '''Start of main code'''
 maxFileSize = 100000
