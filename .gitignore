@@ -14,9 +14,7 @@ StateMachineLog.log
 #SensorTx_v2/MS5837.h
 
 #screwaround tests
-codeScribbles.py
-codeScribbles2.py
-codeScribbles3.py
+/Code_Scribbles
 serial_in_test.py
 shmWriteTest.py
 SMtests/

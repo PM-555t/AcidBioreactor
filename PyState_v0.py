@@ -192,6 +192,7 @@ lastLongTime = time.monotonic()
 
 #variables that will be parsed; instantiate just for memory purposes
 CO2volts = float(0)
+CO2ppm = float(0)
 CO2cal = 400.0 #LICOR set with 0-5 V DAC, for 0-2000 ppm range, or 400 ppm/V. Arduino ADC is 10-bit, apparently, so overall resolution is 0.5 ppm.
 pHval = float(0)
 PARval = float(0)
@@ -216,7 +217,7 @@ pHset = 6.5 #can change this later
 CO2_max = 0 #just an empty value for now
 CO2_set = 400 #in ppm, post converstion from voltage
 tempCO2 = CO2_set #just a changeable placeholder value
-dPHdT_set = 0.2 #pH units / hour; can change this later
+dPHdT_set = 1.0 #pH units / hour; can change this later
 dilutionVol = 5000
 overflow = int(0) #0 for no, 1 for float SW in acidify, 2 for float SW in dilution
 floatReleaseAttempts = int(0)
@@ -298,7 +299,7 @@ while True:
         '''If we actually have a new reading, then capture our averaged readings'''
         if valChange: 
             print(test)
-            CO2volts = recentVals['CO2'].astype(float).mean() #as of 10/15, is actually CO2 ppm
+            CO2ppm = recentVals['CO2'].astype(float).mean() #as of 1/8, is no longer labeled as CO2volts
             pHval = recentVals['pH'].astype(float).mean()
             PARval = recentVals['PAR'].astype(float).mean()
             DOval = recentVals['DO'].astype(float).mean()
@@ -333,10 +334,14 @@ while True:
 
                 lastLongTime = time.monotonic()
                 
-                curArray = [lastLongTime,CO2volts,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]
-                delimArrayString = (str(lastLongTime)+':'+str(CO2volts)+':'+str(pHval)+':'+str(PARval)+':'+
-                                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
-                                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
+                #CO2 volts is actually ppm now
+                curArray = [lastLongTime,CO2ppm,pHval,PARval,DOval,pressure,temperature,DOcode,pHcode,floatSW,longdPHdT]
+                #delimArrayString = (str(lastLongTime)+':'+str(CO2ppm)+':'+str(pHval)+':'+str(PARval)+':'+
+                #                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
+                #                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
+                delimArrayString = (f'{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{PARval:.3f}:
+                                    {DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:
+                                    {pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
                 
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
@@ -419,20 +424,16 @@ while True:
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
                     pumpWaitTimer(myReactor,True,3600)#start major timer for 1 hr
                     if longIndex > 1: #don't trust table or reading at first row
-                        if longIndex == 61:
-                            CO2_max = longVals.loc[longIndex - 1]['CO2'] * CO2cal #convert from volts to ppm
-                        else:
-                            CO2_max = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
+                        #Index should always be -1; 60 will be filled if index is 61, any other index should be chosen as previous
+                        CO2_max = longVals.loc[longIndex - 1]['CO2']# * CO2cal; doesn't need to be converted, was already done in recentVals!
                     else:
                         CO2_max = CO2_set #basically just assuming CO2 = setpoint
                     
                 #every loop, update current max CO2 reading
                 tempCO2 = CO2_set
                 if longIndex > 1: #don't trust table or reading at first row
-                    if longIndex == 61:
-                        tempCO2 = longVals.loc[longIndex-1]['CO2'] * CO2cal #convert from volts to ppm
-                    else:
-                        tempCO2 = longVals.loc[longIndex]['CO2'] * CO2cal #convert from volts to ppm
+                    #Index should always be -1; 60 will be filled if index is 61, any other index should be chosen as previous
+                    tempCO2 = longVals.loc[longIndex-1]['CO2']# * CO2cal; doesn't need to be converted, was already done in recentVals!
                 if tempCO2 > CO2_max:
                     CO2_max = tempCO2
                     
