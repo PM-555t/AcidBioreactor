@@ -227,6 +227,7 @@ CO2_set = 400 #in ppm, post converstion from voltage
 tempCO2 = CO2_set #just a changeable placeholder value
 dPHdT_set = 1.0 #pH units / hour; can change this later
 dilutionVol = 5000
+acidLimit = 40 #the total allowable added acid volume in State 40 (Acidification)
 overflow = int(0) #0 for no, 1 for float SW in acidify, 2 for float SW in dilution
 floatReleaseAttempts = int(0)
 
@@ -384,7 +385,7 @@ while True:
                     #in acidification, we add 1 mL of acid at a time, up to 15
                     #after adding each mL, we wait 1 minute
                     #then check if we've triggered our pH limit or we have too much volume
-                    if (acidVolAdded <= 15) and (pHval > pHset):
+                    if (acidVolAdded <= acidLimit) and (pHval > pHset):
                         if justPumped == False: #first time running pump
                             runPump(addrAcidPump,pumpCal*1,__name__) #run pump for first time, for 1 mL
                             justPumped = True
@@ -400,6 +401,7 @@ while True:
                     else:
                         myReactor._pumpOrMsr = False #measuring, not pumping
                         myReactor.nextState(50) #change to "Watch CO2"
+                        acidVolAdded = 0
 
                     if overflow != 0:            
                         overflow = 0
@@ -416,6 +418,7 @@ while True:
                     if myReactor.curMinorTimer(): #make sure pump isn't running
                         myReactor._pumpOrMsr = False
                         myReactor.nextState(71) #switch to dilution
+                        acidVolAdded = 0
                 
                     
             case 50:
