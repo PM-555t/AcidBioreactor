@@ -347,9 +347,7 @@ while True:
                 #delimArrayString = (str(lastLongTime)+':'+str(CO2ppm)+':'+str(pHval)+':'+str(PARval)+':'+
                 #                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
                 #                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
-                delimArrayString = (f'{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{PARval:.3f}:
-                                    {DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:
-                                    {pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
+                delimArrayString = (f'{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{PARval:.3f}:{DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:{pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
                 
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
@@ -469,10 +467,12 @@ while True:
                     currpH = longVals.loc[58:60]['pH'].astype(float).mean() #average the last 3 minutes
                     
                     logger.info('Incubate; pH change rate: '+str(absMaxPhRate)+', avg pH: '+str(currpH))
-                    if (absMaxPhRate < dPHdT_set) and ((currpH - pHset) < 0.5): #to make basic again
-                        myReactor.nextState(71)
-                    elif (absMaxPhRate < dPHdT_set) and ((currpH - pHset) > 0.5): #to bring pH back down
-                        myReactor.nextState(40)                   
+                    CO2_check = longVals.loc[longIndex - 1]['CO2']
+                    if (CO2_check < CO2_set):    
+                        if (absMaxPhRate < dPHdT_set) and ((currpH - pHset) < 0.5): #to make basic again
+                            myReactor.nextState(71)
+                        elif (absMaxPhRate < dPHdT_set) and ((currpH - pHset) > 0.5): #to bring pH back down
+                            myReactor.nextState(40)                   
                     else: #if rate > set, reset the major timer to 10 minutes to check again
                         logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
                         pumpWaitTimer(myReactor,True,600)
