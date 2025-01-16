@@ -20,6 +20,8 @@ shmWriteTest.py
 SMtests/
 example.log
 example2.log
+short.log
 PyState_v0_Test_12-6-24.py
 PyState_vTest_12-9-24.py
 /Keithley
+/Parsing/PyLog CSV's

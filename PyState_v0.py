@@ -204,6 +204,7 @@ CO2ppm = float(0)
 CO2cal = 400.0 #LICOR set with 0-5 V DAC, for 0-2000 ppm range, or 400 ppm/V. Arduino ADC is 10-bit, apparently, so overall resolution is 0.5 ppm.
 pHval = float(0)
 PARval = float(0)
+PAR_cal = 266.7 #(umol / (m^2*s)) / volt; range could be 266.7 to 1875 based on online numbers
 DOval = float(0)
 pressure = float(0)
 temperature = float(0)
@@ -348,7 +349,8 @@ while True:
                 #delimArrayString = (str(lastLongTime)+':'+str(CO2ppm)+':'+str(pHval)+':'+str(PARval)+':'+
                 #                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
                 #                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
-                delimArrayString = (f'{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{PARval:.3f}:{DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:{pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
+                delimArrayString = (f'{myReactor._state.stateNumber:.0f}:{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{(PARval*PAR_cal):.1f}:
+                                    {DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:{pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
                 
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
@@ -475,7 +477,10 @@ while True:
                         if (absMaxPhRate < dPHdT_set) and ((currpH - pHset) < 0.5): #to make basic again
                             myReactor.nextState(71)
                         elif (absMaxPhRate < dPHdT_set) and ((currpH - pHset) > 0.5): #to bring pH back down
-                            myReactor.nextState(40)                   
+                            myReactor.nextState(40)
+                        #In the below case, CO2 is low enough but pH change rate is still too fast
+                        logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
+                        pumpWaitTimer(myReactor,True,600)                   
                     else: #if rate > set, reset the major timer to 10 minutes to check again
                         logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
                         pumpWaitTimer(myReactor,True,600)
