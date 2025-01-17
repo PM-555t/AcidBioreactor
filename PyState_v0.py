@@ -349,8 +349,8 @@ while True:
                 #delimArrayString = (str(lastLongTime)+':'+str(CO2ppm)+':'+str(pHval)+':'+str(PARval)+':'+
                 #                    str(DOval)+':'+str(pressure)+':'+str(temperature)+':'+str(DOcode)+':'+
                 #                    str(pHcode)+':'+str(floatSW)+':'+str(longdPHdT))
-                delimArrayString = (f'{myReactor._state.stateNumber:.0f}:{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{(PARval*PAR_cal):.1f}:
-                                    {DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:{pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
+                delimArrayString = (f'{myReactor._state.stateNumber:.0f}:{lastLongTime:.3f}:{CO2ppm:.1f}:{pHval:.3f}:{(PARval*PAR_cal):.1f}:'
+                                    f'{DOval:.3f}:{pressure:.3f}:{temperature:.1f}:{DOcode:.0f}:{pHcode:.0f}:{floatSW:.0f}:{longdPHdT:.3f}')
                 
                 if longIndex < 61: #fill down initially
                     if not longVals.loc[longIndex][0] == lastLongTime:
