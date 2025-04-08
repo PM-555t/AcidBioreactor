@@ -89,14 +89,24 @@ class App(tk.Frame):
         self.CO2_cal.grid(row=0,column=7)
         self.entry_list.append(self.CO2_cal)
         
-        tk.Label(self,text="Avg pump speed, sec/mL").grid(row=1,column=6)
-        self.pumpcal = tk.Entry(self)
-        self.pumpcal.grid(row=1,column=7)
-        self.entry_list.append(self.pumpcal)
+        tk.Label(self,text="Acid pump speed, sec/mL").grid(row=1,column=6)
+        self.acidpumpcal = tk.Entry(self)
+        self.acidpumpcal.grid(row=1,column=7)
+        self.entry_list.append(self.acidpumpcal)
+
+        tk.Label(self,text="SW pump speed, sec/mL").grid(row=2,column=6)
+        self.swpumpcal = tk.Entry(self)
+        self.swpumpcal.grid(row=2,column=7)
+        self.entry_list.append(self.swpumpcal)
+
+        tk.Label(self,text="Excess pump speed, sec/mL").grid(row=3,column=6)
+        self.excesspumpcal = tk.Entry(self)
+        self.excesspumpcal.grid(row=3,column=7)
+        self.entry_list.append(self.excesspumpcal)
         
-        tk.Label(self,text="PAR cal, umol/volt").grid(row=2,column=6)
+        tk.Label(self,text="PAR cal, umol/volt").grid(row=4,column=6)
         self.parcal = tk.Entry(self)
-        self.parcal.grid(row=2,column=7)
+        self.parcal.grid(row=4,column=7)
         self.entry_list.append(self.parcal)
         
         ##### Buttons
@@ -144,7 +154,9 @@ class App(tk.Frame):
 
             cals = config_object["CALIBRATIONS"]
             self.CO2_cal.insert(0,cals["co2cal"])
-            self.pumpcal.insert(0,cals["pumpcal"])
+            self.acidpumpcal.insert(0,cals["acidpumpcal"])
+            self.swpumpcal.insert(0,cals["swpumpcal"])
+            self.excesspumpcal.insert(0,cals["excesspumpcal"])
             self.parcal.insert(0,cals["parcal"])
 
     def captureConfig(self):
@@ -184,7 +196,9 @@ class App(tk.Frame):
         self.answers['incubaterewait'] = self.incubate_rewait.get()
         #Calibrations
         self.answers['co2cal'] = self.CO2_cal.get()
-        self.answers['pumpcal'] = self.pumpcal.get()
+        self.answers['acidpumpcal'] = self.acidpumpcal.get()
+        self.answers['swpumpcal'] = self.swpumpcal.get()
+        self.answers['excesspumpcal'] = self.excesspumpcal.get()
         self.answers['parcal'] = self.parcal.get()
 
         config_out = ConfigParser()
@@ -210,7 +224,9 @@ class App(tk.Frame):
         }
         config_out["CALIBRATIONS"] = {
             "CO2cal": self.answers['co2cal'], 
-            "pumpCal": self.answers['pumpcal'],
+            "acidpumpCal": self.answers['acidpumpcal'],
+            "swpumpCal": self.answers['swpumpcal'],
+            "excesspumpCal": self.answers['excesspumpcal'],
             "PARcal": self.answers['parcal']
         }
 

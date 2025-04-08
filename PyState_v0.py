@@ -12,6 +12,7 @@ import threading
 import smbus
 import BioReactor
 import _thread
+import datetime
 
 '''Send start command, then after x seconds...'''
 def runPump(addr, seconds, loggername):
@@ -174,7 +175,9 @@ from logging.handlers import QueueListener
 from logging.handlers import RotatingFileHandler
 
 log_queue = queue.Queue()
-rot_queue_handler = RotatingFileHandler('StateMachineLog.log',maxBytes=100000,backupCount=10,encoding='utf-8') #this is non-blocking
+#later, update the below name to inherit RotatingFileHandler and actually cycle the log names
+rotLogName = datetime.datetime.today().strftime('%Y%m%d_%H%M') + '.log' #for now, set the general file name to the start time
+rot_queue_handler = RotatingFileHandler(rotLogName,maxBytes=100000,backupCount=100,encoding='utf-8') #this is non-blocking
 queue_listener = QueueListener(log_queue,rot_queue_handler) #apparently in its own thread
 queue_listener.start()
 
@@ -201,7 +204,9 @@ addrExcessPump = 0x04
 primeTimeSWPump = times["primetimeswpump"] #time to prime the pumps at startup.
 primeTimeAcidPump = times["primetimeacidpump"]
 primeTimeExcessPump = times["primetimeexcesspump"]
-pumpCal = cals["pumpcal"] #sec/mL, averaged across the three pumps
+acidPumpCal = cals["acidpumpcal"] #sec/mL
+swPumpCal = cals["swpumpcal"] #sec/mL
+excessPumpCal = cals["excesspumpcal"] #sec/mL
 #apparently the code can hang if the pumps are issued start commands when already running, so make sure they're off
 shutOffPump(boardAddr,addrSWPump,bus,__name__)
 shutOffPump(boardAddr,addrAcidPump,bus,__name__)
@@ -446,13 +451,13 @@ while True:
                     #then check if we've triggered our pH limit or we have too much volume
                     if (acidVolAdded <= acidLimit) and (pHval > pHset):
                         if justPumped == False: #first time running pump
-                            runPump(addrAcidPump,pumpCal*1,__name__) #run pump for first time, for 1 mL
+                            runPump(addrAcidPump,acidPumpCal*1,__name__) #run pump for first time, for 1 mL
                             justPumped = True
                             myReactor._pumpOrMsr = True #set state to pumping, not measuring
                             pumpWaitTimer(myReactor,False,180.0) #set minor timer to 3 minutes
                             acidVolAdded = acidVolAdded + 1 #add to acidVolAdded
                         elif myReactor.curMinorTimer(): #just pumped AND timer finished; true means the timer has finished
-                            runPump(addrAcidPump,pumpCal*1,__name__)
+                            runPump(addrAcidPump,acidPumpCal*1,__name__)
                             pumpWaitTimer(myReactor,False,180.0) 
                             acidVolAdded = acidVolAdded + 1 
                         else: #just pumped, but timer is not finished
@@ -566,10 +571,10 @@ while True:
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
-                    runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
+                    runPump(addrExcessPump,excessPumpCal*actualDilVol,__name__) #run pump for X L
                     justPumped = True
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
-                    pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
+                    pumpWaitTimer(myReactor,False,(excessPumpCal*actualDilVol)+60.0) #set minor timer to pump time + delay
                 
                 if myReactor.curMinorTimer(): #When pump is done...
                     if floatSW == 1 and overflow == 0: #...if we got here from Watch CO2...
@@ -592,10 +597,10 @@ while True:
                         if floatReleaseAttempts > 2:
                             logger.error('Exiting. Float switch is stuck, or liquid not leaving chamber.')
                             _thread.interrupt_main() #calls keyboard interrupt to exit for safety reasons
-                        runPump(addrExcessPump,pumpCal*actualDilVol,__name__) #run pump for X L
+                        runPump(addrExcessPump,excessPumpCal*actualDilVol,__name__) #run pump for X L
                         justPumped = True
                         myReactor._pumpOrMsr = True
-                        pumpWaitTimer(myReactor,False,(pumpCal*actualDilVol)) #set minor timer to pump time + delay
+                        pumpWaitTimer(myReactor,False,(excessPumpCal*actualDilVol)) #set minor timer to pump time + delay
                         floatReleaseAttempts = floatReleaseAttempts + 1
                         print("Attempted to relieve float switch "+str(floatReleaseAttempts)+" times.")
                     
@@ -608,10 +613,10 @@ while True:
                     lastState = state
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
-                    runPump(addrSWPump,pumpCal*dilutionVol,__name__) #run pump for 5 L
+                    runPump(addrSWPump,swPumpCal*dilutionVol,__name__) #run pump for 5 L
                     justPumped = True
                     myReactor._pumpOrMsr = True #set state to pumping, not measuring
-                    pumpWaitTimer(myReactor,False,(pumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
+                    pumpWaitTimer(myReactor,False,(swPumpCal*dilutionVol)+60.0) #set minor timer to pump time + delay
                 
                 if myReactor.curMinorTimer() or (floatSW < 1): #when pump is done or float switch active...
                     if floatSW < 1:
