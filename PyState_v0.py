@@ -92,7 +92,7 @@ def ConfigRetrieve():
 
     #check that config is in the correct folder and properly named
     try:
-        configLocation = (Path(__file__).parent / "Config\\BioreactorConfig.ini")
+        configLocation = (Path(__file__).parent / "Config/BioreactorConfig.ini")
         config_object.read(configLocation)
     except:
         print('Cannot find or load config file')
@@ -201,12 +201,12 @@ boardAddr = 0x10 #can later add code to detect; confirm these with hardware chan
 addrSWPump = 0x02
 addrAcidPump = 0x03
 addrExcessPump = 0x04
-primeTimeSWPump = times["primetimeswpump"] #time to prime the pumps at startup.
-primeTimeAcidPump = times["primetimeacidpump"]
-primeTimeExcessPump = times["primetimeexcesspump"]
-acidPumpCal = cals["acidpumpcal"] #sec/mL
-swPumpCal = cals["swpumpcal"] #sec/mL
-excessPumpCal = cals["excesspumpcal"] #sec/mL
+primeTimeSWPump = float(times["primetimeswpump"]) #time to prime the pumps at startup.
+primeTimeAcidPump = float(times["primetimeacidpump"])
+primeTimeExcessPump = float(times["primetimeexcesspump"])
+acidPumpCal = float(cals["acidpumpcal"]) #sec/mL
+swPumpCal = float(cals["swpumpcal"]) #sec/mL
+excessPumpCal = float(cals["excesspumpcal"]) #sec/mL
 #apparently the code can hang if the pumps are issued start commands when already running, so make sure they're off
 shutOffPump(boardAddr,addrSWPump,bus,__name__)
 shutOffPump(boardAddr,addrAcidPump,bus,__name__)
@@ -256,10 +256,10 @@ lastLongTime = time.monotonic()
 #variables that will be parsed; instantiate just for memory purposes
 CO2volts = float(0)
 CO2ppm = float(0)
-CO2cal = cals["co2cal"] #LICOR set with 0-5 V DAC, for 0-2000 ppm range, or 400 ppm/V. Arduino ADC is 10-bit, apparently, so overall resolution is 0.5 ppm.
+CO2cal = float(cals["co2cal"]) #LICOR set with 0-5 V DAC, for 0-2000 ppm range, or 400 ppm/V. Arduino ADC is 10-bit, apparently, so overall resolution is 0.5 ppm.
 pHval = float(0)
 PARval = float(0)
-PAR_cal = cals["parcal"] #(umol / (m^2*s)) / volt; range could be 266.7 to 1875 based on online numbers
+PAR_cal = float(cals["parcal"]) #(umol / (m^2*s)) / volt; range could be 266.7 to 1875 based on online numbers
 DOval = float(0)
 pressure = float(0)
 temperature = float(0)
@@ -277,13 +277,13 @@ valChange = False
 pumpOrMsr = False #a sub-state
 justPumped = False
 acidVolAdded = int(0)
-pHset = sets["ph_set"]
+pHset = float(sets["ph_set"])
 CO2_max = 0 #just an empty value for now
-CO2_set = sets["co2_set"] #in ppm, post converstion from voltage
+CO2_set = float(sets["co2_set"]) #in ppm, post converstion from voltage
 tempCO2 = CO2_set #just a changeable placeholder value
-dPHdT_set = sets["dphdt_set"] #pH units / hour; can change this later
-incubatePhDelta = sets["incubatephdelta"]
-dilutionVol = vols["dilutionvol"]
+dPHdT_set = float(sets["dphdt_set"]) #pH units / hour; can change this later
+incubatePhDelta = float(sets["incubatephdelta"])
+dilutionVol = float(vols["dilutionvol"])
 acidLimit = 40 #the total allowable added acid volume in State 40 (Acidification)
 overflow = int(0) #0 for no, 1 for float SW in acidify, 2 for float SW in dilution
 floatReleaseAttempts = int(0)
@@ -442,8 +442,8 @@ while True:
                         justPumped = False #reset flag for having run acid pump
                         myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
                         #Update config values, but only when transitioning. Don't update every cycle.
-                        pHset = sets["ph_set"]
-                        acidLimit = vols["acidlimit"]
+                        pHset = float(sets["ph_set"])
+                        acidLimit = float(vols["acidlimit"])
                     
                     #Below block commented out for testing purposes, 10-4-24
                     #in acidification, we add 1 mL of acid at a time, up to 15
@@ -495,9 +495,9 @@ while True:
                     switchTimerFlag(myReactor,False,True) #minor timer
                     justPumped = False #reset flag for having run acid pump
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
-                    pumpWaitTimer(myReactor,True,times["watchco2wait"])#start major timer
+                    pumpWaitTimer(myReactor,True,float(times["watchco2wait"]))#start major timer
                     #Update config values, but only when transitioning. Don't update every cycle.
-                    CO2_set = sets["co2_set"]
+                    CO2_set = float(sets["co2_set"])
                     if longIndex > 1: #don't trust table or reading at first row
                         #Index should always be -1; 60 will be filled if index is 61, any other index should be chosen as previous
                         CO2_max = longVals.loc[longIndex - 1]['CO2']# * CO2cal; doesn't need to be converted, was already done in recentVals!
@@ -528,12 +528,12 @@ while True:
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
                     #set major timer to 1 hr
-                    pumpWaitTimer(myReactor,True,times["incubatewait"])
+                    pumpWaitTimer(myReactor,True,float(times["incubatewait"]))
                     #Update config values, but only when transitioning. Don't update every cycle.
-                    CO2_set = sets["co2_set"]
-                    dPHdT_set = sets["dphdt_set"]
-                    pHset = sets["ph_set"]
-                    incubatePhDelta = sets["incubatephdelta"]
+                    CO2_set = float(sets["co2_set"])
+                    dPHdT_set = float(sets["dphdt_set"])
+                    pHset = float(sets["ph_set"])
+                    incubatePhDelta = float(sets["incubatephdelta"])
                 
                 #at the 1 hr mark, check the last 30 minutes of dPHdT and raw pH data
                 if myReactor.curMajorTimer():
@@ -550,16 +550,16 @@ while True:
                         #In the below case, CO2 is low enough but pH change rate is still too fast
                         else:
                             logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
-                            pumpWaitTimer(myReactor,True,times["incubaterewait"])                   
+                            pumpWaitTimer(myReactor,True,float(times["incubaterewait"]))                   
                     else: #if rate > set, reset the major timer to 10 minutes to check again
                         logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
-                        pumpWaitTimer(myReactor,True,times["incubaterewait"])
+                        pumpWaitTimer(myReactor,True,float(times["incubaterewait"]))
                     #This is where the code can get stuck but it's probably best that nothing is running if the pH probe is throwing wacky values
                 
             case 71:
                 if state != lastState:
                     #Update config values, but only when transitioning. Don't update every cycle.
-                    dilutionVol = vols["dilutionvol"]
+                    dilutionVol = float(vols["dilutionvol"])
                     actualDilVol = dilutionVol
                     if overflow == 1:
                         actualDilVol = 100 #will excess 100 mL if we hit the limit switch during acidification
@@ -607,7 +607,7 @@ while True:
             case 72:
                 if state != lastState:
                     #Update config values, but only when transitioning. Don't update every cycle.
-                    dilutionVol = vols["dilutionvol"] #be aware of the risks of this changing between states 71 and 72!
+                    dilutionVol = float(vols["dilutionvol"]) #be aware of the risks of this changing between states 71 and 72!
                     logger.info('State change:'+str(state))
                     print("Dilute part b")
                     lastState = state
