@@ -495,7 +495,7 @@ while True:
                     switchTimerFlag(myReactor,False,True) #minor timer
                     justPumped = False #reset flag for having run acid pump
                     myReactor._pumpOrMsr = False # reset flag for sub-state of pumping or measuring (to measuring)
-                    pumpWaitTimer(myReactor,True,3600)#start major timer for 1 hr
+                    pumpWaitTimer(myReactor,True,times["watchco2wait"])#start major timer
                     #Update config values, but only when transitioning. Don't update every cycle.
                     CO2_set = sets["co2_set"]
                     if longIndex > 1: #don't trust table or reading at first row
@@ -528,7 +528,7 @@ while True:
                     switchTimerFlag(myReactor,True,True) #major timer
                     switchTimerFlag(myReactor,False,True) #minor timer
                     #set major timer to 1 hr
-                    pumpWaitTimer(myReactor,True,3600)
+                    pumpWaitTimer(myReactor,True,times["incubatewait"])
                     #Update config values, but only when transitioning. Don't update every cycle.
                     CO2_set = sets["co2_set"]
                     dPHdT_set = sets["dphdt_set"]
@@ -550,10 +550,10 @@ while True:
                         #In the below case, CO2 is low enough but pH change rate is still too fast
                         else:
                             logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
-                            pumpWaitTimer(myReactor,True,600)                   
+                            pumpWaitTimer(myReactor,True,times["incubaterewait"])                   
                     else: #if rate > set, reset the major timer to 10 minutes to check again
                         logger.info('Incubate exit conditions not met, timer reset to 10 minutes')
-                        pumpWaitTimer(myReactor,True,600)
+                        pumpWaitTimer(myReactor,True,times["incubaterewait"])
                     #This is where the code can get stuck but it's probably best that nothing is running if the pH probe is throwing wacky values
                 
             case 71:
