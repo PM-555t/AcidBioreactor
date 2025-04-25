@@ -13,6 +13,7 @@ import smbus
 import BioReactor
 import _thread
 import datetime
+import traceback
 
 '''Send start command, then after x seconds...'''
 def runPump(addr, seconds, loggername):
@@ -331,7 +332,7 @@ while True:
         curLine = str(curLine).replace("\\r\\n","") #remove newline chars
         curLine = str(curLine).replace("'","") #remove string-within-a-string
         curLine = str(curLine).replace("b","") #remove byte designations
-        test = str(curLine).split(",") #break the fields up
+        polledLine = str(curLine).split(",") #break the fields up
         
         '''To avoid sensor issues triggering system behavior, we want to average the
         last 10 readings (which ends up being about 60-70 seconds delay), so we need to construct
@@ -342,21 +343,21 @@ while True:
         if dfIndex < 11:
             sameLine = True
             if dfIndex == 1:
-                sameLine = (recentVals.loc[dfIndex]['Time'] == test[0])
+                sameLine = (recentVals.loc[dfIndex]['Time'] == polledLine[0])
             else:
-                sameLine = (recentVals.loc[dfIndex-1]['Time'] == test[0])
+                sameLine = (recentVals.loc[dfIndex-1]['Time'] == polledLine[0])
             if not sameLine: #if the line isn't the same as the one being inserted
-                recentVals.loc[dfIndex] = test #+ [dPHdT]
+                recentVals.loc[dfIndex] = polledLine #+ [dPHdT]
                 recentVals.loc[dfIndex]['CO2'] = float(recentVals.loc[dfIndex]['CO2']) * CO2cal
                 dfIndex = dfIndex + 1
                 valChange = True
             else:
                 pass
         else: #and then iterate down 1 row each sampling period
-            sameLine = (recentVals.loc[10]['Time'] == test[0])
+            sameLine = (recentVals.loc[10]['Time'] == polledLine[0])
             if not sameLine:
                 recentVals = recentVals.loc[:].shift(periods=-1,axis=0) #dont use fill_values because zeros affect mean
-                recentVals.loc[10] = test #+ [dPHdT]
+                recentVals.loc[10] = polledLine #+ [dPHdT]
                 recentVals.loc[10]['CO2'] = float(recentVals.loc[10]['CO2']) * CO2cal
                 valChange = True
             else:
@@ -364,16 +365,16 @@ while True:
         
         '''If we actually have a new reading, then capture our averaged readings'''
         if valChange: 
-            print(test)
+            print(polledLine)
             CO2ppm = recentVals['CO2'].astype(float).mean() #as of 1/8, is no longer labeled as CO2volts
             pHval = recentVals['pH'].astype(float).mean()
             PARval = recentVals['PAR'].astype(float).mean()
             DOval = recentVals['DO'].astype(float).mean()
             pressure = recentVals['Pressure'].astype(float).mean()
             temperature = recentVals['Temperature'].astype(float).mean()
-            DOcode = int(test[8])
-            pHcode = int(test[9])
-            floatSW = int(test[10])
+            DOcode = int(polledLine[8])
+            pHcode = int(polledLine[9])
+            floatSW = int(polledLine[10])
             
             #and insert our averaged readings into the long form table, if it's been long enough
             if ((time.monotonic() - lastLongTime) > 60):
@@ -666,3 +667,32 @@ while True:
         run long enough for that to matter, though, as we don't expect a loop which
         depletes the process table by rapidly iterating process initiation and leaving
         it hanging.'''
+
+    except Exception as e: #we need to also catch unknown errors
+        killTail(f)
+        shutOffPump(boardAddr,addrSWPump,bus,__name__)
+        shutOffPump(boardAddr,addrAcidPump,bus,__name__)
+        shutOffPump(boardAddr,addrExcessPump,bus,__name__)
+
+        #Since we want to capture errors quickly, just list timers once and move on
+        TimerCnt = 0
+        for thread in threading.enumerate():
+            if 'Timer' in str(thread):
+                TimerCnt = TimerCnt + 1
+        print("Timers still running:",TimerCnt,"; Time:",time.monotonic())
+
+        logger.exception('There has been an error')
+        allCfg = [sets,vols,times,cals]
+        cfgString = ''
+        for group in allCfg:
+            for key,value in group.items():
+                cfgString = cfgString + (f"{key}={value};")
+        logger.error(f"Current config values = {cfgString}")
+        logger.error("Current polled line from log file:")
+        logger.error(polledLine)
+        logger.error("Recent Values table:")
+        logger.error(recentVals)
+        logger.error("Long values table:")
+        logger.error(longVals)
+        
+        sys.exit()
