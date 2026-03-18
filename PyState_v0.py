@@ -40,7 +40,7 @@ def startTail(theLogName):
             stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     pnow = select.poll()
     pnow.register(fnow.stdout)
-    print('Reader started')
+    print('(startTail) Reader started')
     return fnow, pnow
 
 '''Closes the tail when necessary to preserve memory and entries
@@ -50,7 +50,7 @@ def killTail(fToKill):
     for proc in process.children(recursive=True):
         proc.kill()
     process.kill()
-    print("Reader process killed")
+    print("(killTail) Reader process killed")
 
 '''Find all CSV files, then determine newest, then open newest'''
 def findNewLog(typeStr):
@@ -66,7 +66,7 @@ def logOverSwap(theLogName):
         if (os.path.getsize(theLogName) > maxFileSize):
             theLogName = findNewLog('*.csv')
             wasDiff = True
-            print('Active log: ' + theLogName)
+            print('(logOverSwap) Active log: ' + theLogName)
     return wasDiff, theLogName
 
 '''Switching timer flags on and off'''
@@ -234,8 +234,8 @@ maxFileSize = 100000
 #later, change the below code to sleep and check again, in case PyState starts before PyLog when Pi comes online
 try:
     logName = findNewLog('*.csv')
-    print('Active log: ' + logName)
-    logger.info('Active log:'+logName)
+    print('(main start) Active log: ' + logName)
+    logger.info('(main start) Active log:'+logName)
 except:
     print('File search failed')
     sys.exit()
@@ -311,19 +311,19 @@ while True:
             logName = logCheck
             killTail(f) #...kill the old tail process...
             f, p = startTail(logName) #...and start a new one.
-            print('Active log: ' + logName)
-            logger.info('Active log:'+logName)
-        #the below line (and function) is redundant now, right?
+            print('(main loop -> logCheck != logName) Active log: ' + logName)
+            logger.info('(main loop -> logCheck != logName) Active log:'+ logName)
+        
         isNew, logName = logOverSwap(logName) #each cycle, check if PyLog iterated the log file for size reasons        
         if isNew: #if it did...
             killTail(f) #...kill the old tail process...
             f, p = startTail(logName) #...and start a new one.
-            print('Active log: ' + logName)
-            logger.info('Active log:'+logName)
+            print('(main loop -> log > 100 KB) Active log: ' + logName)
+            logger.info('(main loop -> log > 100 KB) Active log:'+ logName)
         
         '''Then we grab the last line from the most current log file'''
         #call the tail command, then wait 1 second and try again
-        if p.poll(1):
+        if p.poll(1): #this polls the file descriptor registered to pnow (i.e. stdout of fnow's 'tail' command), waits 1 ms for a response, and yields true if anything is returned
             curLine = f.stdout.readline()
         time.sleep(1)
         #since this doesn't check for updates, we need to check if the line is new or old
@@ -394,6 +394,13 @@ while True:
                             dT = (strSecDiff(recentVals.loc[1]['Time'],recentVals.loc[dfIndex-1]['Time'])/3600)
                     else:
                         dT = (strSecDiff(recentVals.loc[1]['Time'],recentVals.loc[10]['Time'])/3600)
+                    '''Temporary code, 2025-06-11'''
+                    if dT == 0:
+                        dT = 1000000000
+                        logger.warning(f"dT forced. dfIndex={dfIndex}, longIndex={longIndex}") 
+                        logger.warning(f"RecentVal row 1 time={recentVals.loc[1]['Time']}. RecentVal time at row (dfIndex - 1)={recentVals.loc[dfIndex-1]['Time']}. RecentVal row 10 time={recentVals.loc[10]['Time']}")
+                        logger.warning(f"Current log file = {logName}")
+                    '''Temporary code, 2025-06-11'''
                     longdPHdT = dPH / dT #pH units per hour
                     logger.debug("dPH:"+str(dPH)+":dT:"+str(dT)+":dPHdT:"+str(longdPHdT))
                     #print("Current dPH: "+str(dPH)+", dT: "+str(dT)+", dPHdT: "+str(longdPHdT))
@@ -690,6 +697,8 @@ while True:
         logger.error(f"Current config values = {cfgString}")
         logger.error("Current polled line from log file:")
         logger.error(polledLine)
+        logger.error(f"dfIndex = {dfIndex}")
+        logger.error(f"longIndex = {longIndex}")
         logger.error("Recent Values table:")
         logger.error(recentVals)
         logger.error("Long values table:")
